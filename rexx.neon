@@ -1,0 +1,3156 @@
+IMPORT base
+IMPORT binary
+IMPORT console
+IMPORT datetime
+IMPORT file
+IMPORT io
+IMPORT math
+IMPORT os
+IMPORT process
+IMPORT random
+IMPORT string
+IMPORT sys
+IMPORT textio
+IMPORT time
+
+IMPORT OPTIONAL posix
+
+EXCEPTION SignalException
+EXCEPTION SignalException.Notready
+EXCEPTION SignalException.Novalue
+EXCEPTION SignalException.Syntax
+
+CONSTANT Limit_EnvironmentName := 99
+CONSTANT Limit_Name := 99
+CONSTANT Limit_Literal := 99
+CONSTANT Limit_Digits := 99
+CONSTANT Limit_ExponentDigits := 99
+CONSTANT Limit_String := 99
+
+LET ErrorText := {
+    "0.1"  : "Error <value> running <source>, line <linenumber>:"
+    "0.2"  : "Error <value> in interactive trace:"
+    "0.3"  : "Interactive trace.  \"Trace Off\" to end debug.  ENTER to continue."
+    "2"    : "Failure during finalization"
+    "2.1"  : "Failure during finalization: <description>"
+    "3"    : "Failure during initialization"
+    "3.1"  : "Failure during initialization: <description>"
+    "4"    : "Program interrupted"
+    "4.1"  : "Program interrupted with HALT condition: <description>"
+    "5"    : "System resources exhausted"
+    "5.1"  : "System resources exhausted: <description>"
+    "6"    : "Unmatched \"/*\" or quote"
+    "6.1"  : "Unmatched comment delimiter (\"/*\")"
+    "6.2"  : "Unmatched single quote (')"
+    "6.3"  : "Unmatched double quote (\")"
+    "7"    : "WHEN or OTHERWISE expected"
+    "7.1"  : "SELECT on line <linenumber> requires WHEN; found \"<token>\""
+    "7.2"  : "SELECT on line <linenumber> requires WHEN, OTHERWISE, or END; found \"<token>\""
+    "7.3"  : "All WHEN expressions of SELECT on line <linenumber> are false; OTHERWISE expected"
+    "8"    : "Unexpected THEN or ELSE"
+    "8.1"  : "THEN has no corresponding IF or WHEN clause"
+    "8.2"  : "ELSE has no corresponding THEN clause"
+    "9"    : "Unexpected WHEN or OTHERWISE"
+    "9.1"  : "WHEN has no corresponding SELECT"
+    "9.2"  : "OTHERWISE has no corresponding SELECT"
+    "10"   : "Unexpected or unmatched END"
+    "10.1" : "END has no corresponding DO or SELECT"
+    "10.2" : "END corresponding to DO on line <linenumber> must have a symbol following that matches the control variable (or no symbol); found \"<token>\""
+    "10.3" : "END corresponding to DO on line <linenumber> must not have a symbol following it because there is no control variable; found \"<token>\""
+    "10.4" : "END corresponding to SELECT on line <linenumber> must not have a symbol following; found \"<token>\""
+    "10.5" : "END must not immediately follow THEN"
+    "10.6" : "END must not immediately follow ELSE"
+    "13"   : "Invalid character in program"
+    "13.1" : "Invalid character in program \"<char>\" ('<hex-encoding>'X)"
+    "14"   : "Incomplete DO/SELECT/IF"
+    "14.1" : "DO instruction requires a matching END"
+    "14.2" : "SELECT instruction requires a matching END"
+    "14.3" : "THEN requires a following instruction"
+    "14.4" : "ELSE requires a following instruction"
+    "15"   : "Invalid hexadecimal or binary string"
+    "15.1" : "Invalid location of blank in position <position> in hexadecimal string"
+    "15.2" : "Invalid location of blank in position <position> in binary string"
+    "15.3" : "Only 0-9, a-f, A-F, and blank are valid in a hexadecimal string; found \"<char>\""
+    "15.4" : "Only 0, 1, and blank are valid in a binary string; found \"<char>\""
+    "16"   : "Label not found"
+    "16.1" : "Label \"<name>\" not found"
+    "16.2" : "Cannot SIGNAL to label \"<name>\" because it is inside an IF, SELECT or DO group"
+    "16.3" : "Cannot invoke label \"<name>\" because it is inside an IF, SELECT or DO group"
+    "17"   : "Unexpected PROCEDURE"
+    "17.1" : "PROCEDURE is valid only when it is the first instruction executed after an internal CALL or function invocation"
+    "18"   : "THEN expected"
+    "18.1" : "IF keyword on line <linenumber> requires matching THEN clause; found \"<token>\""
+    "18.2" : "WHEN keyword on line <linenumber> requires matching THEN clause; found \"<token>\""
+    "19"   : "String or symbol expected"
+    "19.1" : "String or symbol expected after ADDRESS keyword; found \"<token>\""
+    "19.2" : "String or symbol expected after CALL keyword; found \"<token>\""
+    "19.3" : "String or symbol expected after NAME keyword; found \"<token>\""
+    "19.4" : "String or symbol expected after SIGNAL keyword; found \"<token>\""
+    "19.6" : "String or symbol expected after TRACE keyword; found \"<token>\""
+    "19.7" : "Symbol expected in parsing pattern; found \"<token>\""
+    "20"   : "Name expected"
+    "20.1" : "Name required; found \"<token>\""
+    "20.2" : "Found \"<token>\" where only a name is valid"
+    "21"   : "Invalid data on end of clause"
+    "21.1" : "The clause ended at an unexpected token; found \"<token>\""
+    "22"   : "Invalid character string"
+    "22.1" : "Invalid character string \"<hex-encoding>\"X"
+    "23"   : "Invalid data string"
+    "23.1" : "Invalid data string \"<hex-encoding>\"X"
+    "24"   : "Invalid TRACE request"
+    "24.1" : "TRACE request letter must be one of \"ACEFILNOR\"; found \"<value>\""
+    "25"   : "Invalid sub-keyword found"
+    "25.1" : "CALL ON must be followed by one of the keywords <keywords>; found \"<token>\""
+    "25.2" : "CALL OFF must be followed by one of the keywords <keywords>; found \"<token>\""
+    "25.3" : "SIGNAL ON must be followed by one of the keywords <keywords>; found \"<token>\""
+    "25.4" : "SIGNAL OFF must be followed by one of the keywords <keywords>; found \"<token>\""
+    "25.5" : "ADDRESS WITH must be followed by one of the keywords <keywords>; found \"<token>\""
+    "25.6" : "INPUT must be followed by one of the keywords <keywords>; found \"<token>\""
+    "25.7" : "OUTPUT must be followed by one of the keywords <keywords>; found \"<token>\""
+    "25.8" : "APPEND must be followed by one of the keywords <keywords>; found \"<token>\""
+    "25.9" : "REPLACE must be followed by one of the keywords <keywords>; found \"<token>\""
+    "25.11": "NUMERIC FORM must be followed by one of the keywords <keywords>; found \"<token>\""
+    "25.12": "PARSE must be followed by one of the keywords <keywords>; found \"<token>\""
+    "25.13": "UPPER must be followed by one of the keywords <keywords>; found \"<token>\""
+    "25.14": "ERROR must be followed by one of the keywords <keywords>; found \"<token>\""
+    "25.15": "NUMERIC must be followed by one of the keywords <keywords>; found \"<token>\""
+    "25.16": "FOREVER must be followed by one of the keywords <keywords> or nothing; found \"<token>\""
+    "25.17": "PROCEDURE must be followed by the keyword EXPOSE or nothing; found \"<token>\""
+    "26"   : "Invalid whole number"
+    "26.1" : "Whole numbers must fit within current DIGITS setting(<value>); found \"<value>\""
+    "26.2" : "Value of repetition count expression in DO instruction must be zero or a positive whole number; found \"<value>\""
+    "26.3" : "Value of FOR expression in DO instruction must be zero or a positive whole number; found \"<value>\""
+    "26.4" : "Positional pattern of parsing template must be a whole number; found \"<value>\""
+    "26.5" : "NUMERIC DIGITS value must be a positive whole number; found \"<value>\""
+    "26.6" : "NUMERIC FUZZ value must be zero or a positive whole number; found \"<value>\""
+    "26.7" : "Number used in TRACE setting must be a whole number; found \"<value>\""
+    "26.8" : "Operand to right of the power operator (\"**\") must be a whole number; found \"<value>\""
+    "26.11": "Result of <value> % <value> operation would need exponential notation at current NUMERIC DIGITS <value>"
+    "26.12": "Result of % operation used for <value> // <value> operation would need exponential notation at current NUMERIC DIGITS <value>"
+    "27"   : "Invalid DO syntax"
+    "27.1" : "Invalid use of keyword \"<token>\" in DO clause"
+    "28"   : "Invalid LEAVE or ITERATE"
+    "28.1" : "LEAVE is valid only within a repetitive DO loop"
+    "28.2" : "ITERATE is valid only within a repetitive DO loop"
+    "28.3" : "Symbol following LEAVE (\"<token>\") must either match control variable of a current DO loop or be omitted"
+    "28.4" : "Symbol following ITERATE (\"<token>\") must either match control variable of a current DO loop or be omitted"
+    "29"   : "Environment name too long"
+    "29.1" : "Environment name exceeds \(Limit_EnvironmentName) characters; found \"<name>\""
+    "30"   : "Name or string too long"
+    "30.1" : "Name exceeds \(Limit_Name) characters"
+    "30.2" : "Literal string exceeds \(Limit_Literal) characters"
+    "31"   : "Name starts with number or \".\""
+    "31.1" : "A value cannot be assigned to a number; found \"<token>\""
+    "31.2" : "Variable symbol must not start with a number; found \"<token>\""
+    "31.3" : "Variable symbol must not start with a \".\"; found \"<token>\""
+    "33"   : "Invalid expression result"
+    "33.1" : "Value of NUMERIC DIGITS (\"<value>\") must exceed value of NUMERIC FUZZ \"(<value>)\""
+    "33.2" : "Value of NUMERIC DIGITS (\"<value>\") must not exceed \(Limit_Digits)"
+    "33.3" : "Result of expression following NUMERIC FORM must start with \"E\" or \"S\"; found \"<value>\""
+    "34"   : "Logical value not \"0\" or \"1\""
+    "34.1" : "Value of expression following IF keyword must be exactly \"0\" or \"1\"; found \"<value>\""
+    "34.2" : "Value of expression following WHEN keyword must be exactly \"0\" or \"1\"; found \"<value>\""
+    "34.3" : "Value of expression following WHILE keyword must be exactly \"0\" or \"1\"; found \"<value>\""
+    "34.4" : "Value of expression following UNTIL keyword must be exactly \"0\" or \"1\"; found \"<value>\""
+    "34.5" : "Value of expression to left of logical operator \"<operator>\" must be exactly \"0\" or \"1\"; found \"<value>\""
+    "34.6" : "Value of expression to right of logical operator \"<operator>\" must be exactly \"0\" or \"1\"; found \"<value>\""
+    "35"   : "Invalid expression"
+    "35.1" : "Invalid expression detected at \"<token>\""
+    "36"   : "Unmatched \"(\" in expression"
+    "37"   : "Unexpected \",\" or \")\""
+    "37.1" : "Unexpected \",\""
+    "37.2" : "Unmatched \")\" in expression"
+    "38"   : "Invalid template or pattern"
+    "38.1" : "Invalid parsing template detected at \"<token>\""
+    "38.2" : "Invalid parsing position detected at \"<token>\""
+    "38.3" : "PARSE VALUE instruction requires WITH keyword"
+    "40"   : "Incorrect call to routine"
+    "40.1" : "External routine \"<name>\" failed"
+    "40.3" : "Not enough arguments in invocation of <bif>; minimum expected is <argnumber>"
+    "40.4" : "Too many arguments in invocation of <bif>; maximum expected is <argnumber>"
+    "40.5" : "Missing argument in invocation of <bif>; argument <argnumber> is required"
+    "40.9" : "<bif> argument <argnumber> exponent exceeds \(Limit_ExponentDigits) digits; found \"<value>\""
+    "40.11": "<bif> argument <argnumber> must be a number; found \"<value>\""
+    "40.12": "<bif> argument <argnumber> must be a whole number; found \"<value>\""
+    "40.13": "<bif> argument <argnumber> must be zero or positive; found \"<value>\""
+    "40.14": "<bif> argument <argnumber> must be positive; found \"<value>\""
+    "40.15": "<bif> argument <argnumber> must fit in <value> digits; found \"<value>\""
+    "40.16": "<bif> argument 1 requires a whole number fitting within DIGITS(<value>); found \"<value>\""
+    "40.17": "<bif> argument 1 must have an integer part in the range 0:90 and a decimal part no larger than .9; found \"<value>\""
+    "40.18": "<bif> conversion must have a year in the range 0001 to 9999"
+    "40.19": "<bif> argument 2, \"<value>\", is not in the format described by argument 3, \"<value>\""
+    "40.21": "<bif> argument <argnumber> must not be null"
+    "40.23": "<bif> argument <argnumber> must be a single character; found \"<value>\""
+    "40.24": "<bif> argument 1 must be a binary string; found \"<value>\""
+    "40.25": "<bif> argument 1 must be a hexadecimal string; found \"<value>\""
+    "40.26": "<bif> argument 1 must be a valid symbol; found \"<value>\""
+    "40.27": "<bif> argument 1 must be a valid stream name; found \"<value>\""
+    "40.28": "<bif> argument <argnumber>, option must start with one of \"<optionslist>\"; found \"<value>\""
+    "40.29": "<bif> conversion to format \"<value>\" is not allowed"
+    "40.31": "<bif> argument 1 (\"<value>\") must not exceed 100000"
+    "40.32": "<bif> the difference between argument 1 (\"<value>\") and argument 2 (\"<value>\") must not exceed 100000"
+    "40.33": "<bif> argument 1 (\"<value>\") must be less than or equal to argument 2 (\"<value>\")"
+    "40.34": "<bif> argument 1 (\"<value>\") must be less than or equal to the number of lines in the program (<sourceline()>)"
+    "40.35": "<bif> argument 1 cannot be expressed as a whole number; found \"<value>\""
+    "40.36": "<bif> argument 1 must be the name of a variable in the pool; found \"<value>\""
+    "40.37": "<bif> argument 3 must be the name of a pool; found \"<value>\""
+    "40.38": "<bif> argument <argnumber> is not large enough to format \"<value>\""
+    "40.39": "<bif> argument 3 is not zero or one; found \"<value>\""
+    "40.41": "<bif> argument <argnumber> must be within the bounds of the stream; found \"<value>\""
+    "40.42": "<bif> argument 1; cannot position on this stream; found \"<value>\""
+    "41"   : "Bad arithmetic conversion"
+    "41.1" : "Non-numeric value (\"<value>\") to left of arithmetic operation \"<operator>\""
+    "41.2" : "Non-numeric value (\"<value>\") to right of arithmetic operation \"<operator>\""
+    "41.3" : "Non-numeric value (\"<value>\") used with prefix operator \"<operator>\""
+    "41.4" : "Value of TO expression in DO instruction must be numeric; found \"<value>\""
+    "41.5" : "Value of BY expression in DO instruction must be numeric; found \"<value>\""
+    "41.6" : "Value of control variable expression of DO instruction must be numeric; found \"<value>\""
+    "41.7" : "Exponent exceeds \(Limit_ExponentDigits) digits; found \"<value>\""
+    "42"   : "Arithmetic overflow/underflow"
+    "42.1" : "Arithmetic overflow detected at \"<value> <operation> <value>\"; exponent of result requires more than \(Limit_ExponentDigits) digits"
+    "42.2" : "Arithmetic underflow detected at \"<value> <operation> <value>\"; exponent of result requires more than \(Limit_ExponentDigits) digits"
+    "42.3" : "Arithmetic overflow; divisor must not be zero"
+    "43"   : "Routine not found"
+    "43.1" : "Could not find routine \"<name>\""
+    "44"   : "Function did not return data"
+    "44.1" : "No data returned from function \"<name>\""
+    "45"   : "No data specified on function RETURN"
+    "45.1" : "Data expected on RETURN instruction because routine \"<name>\" was called as a function"
+    "46"   : "Invalid variable reference"
+    "46.1" : "Extra token (\"<token>\") found in variable reference; \")\" expected"
+    "47"   : "Unexpected label"
+    "47.1" : "INTERPRET data must not contain labels; found \"<name>\""
+    "48"   : "Failure in system service"
+    "48.1" : "Failure in system service: <description>"
+    "49"   : "Interpretation Error"
+    "49.1" : "Interpretation Error: <description>"
+    "50"   : "Unrecognized reserved symbol"
+    "50.1" : "Unrecognized reserved symbol \"<token>\""
+    "51"   : "Invalid function name"
+    "51.1" : "Unquoted function names must not end with a period; found \"<token>\""
+    "52"   : "Result returned by \"<name>\" is longer than \(Limit_String) characters"
+    "53"   : "Invalid option"
+    "53.1" : "Variable reference expected after STREAM keyword; found \"<token>\""
+    "53.2" : "Variable reference expected after STEM keyword; found \"<token>\""
+    "53.3" : "Argument to STEM must have one period, as its last character; found \"<name>\""
+    "54"   : "Invalid STEM value"
+    "54.1" : "For this STEM APPEND, the value of \"<name>\" must be a count of lines; found: \"<value>\""
+}
+
+TYPE TokenType IS ENUM
+    Label
+    Special
+    Var_symbol
+    Const_symbol
+    String
+    Operator
+    Blank
+    Eos
+END ENUM
+
+TYPE Token IS RECORD
+    line: Number
+    type: TokenType
+    abuttal: Boolean
+    value: String
+END RECORD
+
+TYPE NumericForm IS ENUM
+    engineering
+    scientific
+END ENUM
+
+FUNCTION Token.toString(self: Token): String
+    RETURN "<\(self.line):\(self.type):\(self.value)>"
+END FUNCTION
+
+TYPE ContextType IS ENUM
+    call
+    do_single
+    do_repetitive
+    if
+    select
+END ENUM
+
+TYPE ContextEntry IS RECORD
+    type: ContextType
+    call_tokens: Array<Token>
+    call_return_ip: Number
+    call_args: Array<String>
+    call_is_procedure: Boolean
+    call_vars: Dictionary<String>
+    call_arrays: Dictionary<Dictionary<String>>
+    do_skip: Number
+    do_top: Number
+    do_var: String
+    do_bounded: Boolean
+    do_bounded_to: Number
+    do_by: Number
+    do_for: Number
+    do_while_condition: Number
+    if_skip: Number
+    select_skip: Number
+END RECORD
+
+CONSTANT Signals := [
+    "ERROR",
+    "FAILURE",
+    "HALT",
+    "LOSTDIGITS",
+    "NOTREADY",
+    "NOVALUE",
+    "SYNTAX",
+]
+
+CONSTANT ConditionDescription := {
+    "": "none",
+    "ERROR": "error",
+    "FAILURE": "failure",
+    "HALT": "halt",
+    "LOSTDIGITS": "lostdigits",
+    "NOTREADY": "not ready",
+    "NOVALUE": "no value",
+    "SYNTAX": "syntax"
+}
+
+TYPE SignalHandler IS RECORD
+    label: String
+    instruction: String
+END RECORD
+
+TYPE Condition IS RECORD
+    name: String
+    instruction: String
+    state: String
+END RECORD
+
+VAR script_filename: String
+VAR sourcelines: Array<String>
+VAR source_tokens: Array<Token>
+VAR label_index: Dictionary<Number>
+VAR numeric_digits := 9
+VAR numeric_form := NumericForm.scientific
+VAR numeric_fuzz := 0
+VAR vars: Dictionary<String>
+VAR arrays: Dictionary<Dictionary<String>>
+VAR contexts: Array<ContextEntry>
+VAR signal_handlers: Dictionary<SignalHandler>
+VAR current_condition: Condition
+VAR streams: Dictionary<textio.TextFile>
+-- TODO: these need to go into contexts
+VAR current_environment: String := "SYSTEM"
+VAR last_environment: String
+VAR queue: Array<String>
+VAR trace: Boolean
+
+FUNCTION error(number: Number, values: Dictionary<String> DEFAULT {})
+    RAISE SignalException.Syntax({"number": number, "values": values})
+END FUNCTION
+
+FUNCTION is_digit(c: String): Boolean
+    RETURN "0" <= c <= "9"
+END FUNCTION
+
+FUNCTION is_general_letter(c: String): Boolean
+    RETURN "A" <= c <= "Z" OR
+           "a" <= c <= "z" OR
+           c IN ["_", "!", "?", "@", "#", "$"]
+END FUNCTION
+
+FUNCTION is_var_symbol_char(c: String): Boolean
+    RETURN is_general_letter(c) OR is_digit(c) OR c = "."
+END FUNCTION
+
+FUNCTION convert_binary_string(s: String): String
+    CONSTANT Digits: String := "01"
+    VAR i: Number := s.length()
+    IF i = 0 THEN
+        RETURN ""
+    END IF
+    DEC i
+    VAR r: String := ""
+    VAR b: Number := 0
+    VAR bit: Number := 0b1
+    LOOP
+        IF i < 0 OR s[i] NOT IN Digits THEN
+            RAISE SignalException.Syntax("invalid binary string")
+        END IF
+        b := b + string.find(Digits, s[i]) * bit
+        bit := bit * 2
+        DEC i
+        FOR z := 2 TO 4 DO
+            IF i < 0 THEN
+                -- Ignore missing leading digit.
+                EXIT FOR
+            ELSIF s[i] NOT IN Digits THEN
+                RAISE SignalException.Syntax("invalid binary string")
+            ELSE
+                b := b + string.find(Digits, s[i]) * bit
+                bit := bit * 2
+                DEC i
+            END IF
+        END FOR
+        IF i < 0 OR bit >= 0x100 THEN
+            r := string.fromCodePoint(b) & r
+            b := 0
+            bit := 0b1
+        END IF
+        IF i < 0 THEN
+            EXIT LOOP
+        END IF
+        WHILE i >= 0 AND s[i] = " " DO
+            DEC i
+        END WHILE
+    END LOOP
+    RETURN r
+END FUNCTION
+
+FUNCTION convert_hex_string(s: String): String
+    CONSTANT Digits: String := "0123456789ABCDEF"
+    LET t: String := string.upper(s)
+    VAR i: Number := t.length()
+    IF i = 0 THEN
+        RETURN ""
+    END IF
+    DEC i
+    VAR r: String := ""
+    LOOP
+        IF i < 0 OR t[i] NOT IN Digits THEN
+            error(15.3, {"char": (IF i >= 0 THEN t[i] ELSE "")})
+            -- TODO RAISE SignalException.Syntax("invalid hex string")
+        END IF
+        VAR b: Number := string.find(Digits, t[i])
+        DEC i
+        IF i < 0 THEN
+            -- Ignore missing leading digit.
+        ELSIF t[i] NOT IN Digits THEN
+            error(15.3, {"char": t[i]})
+            -- TODO RAISE SignalException.Syntax("invalid hex string")
+        ELSE
+            b := b + string.find(Digits, t[i]) * 0x10
+            DEC i
+        END IF
+        r := string.fromCodePoint(b) & r
+        IF i < 0 THEN
+            EXIT LOOP
+        END IF
+        WHILE i >= 0 AND t[i] = " " DO
+            DEC i
+        END WHILE
+    END LOOP
+    RETURN r
+END FUNCTION
+
+FUNCTION tokenise(source: String): Array<Token>
+    VAR tokens: Array<Token> := []
+    VAR line: Number := 1
+    VAR i: Number := 0
+    VAR last_was_space: Boolean := FALSE
+    WHILE i < source.length() DO
+        VAR t: Token := Token()
+        t.line := line
+        t.abuttal := NOT last_was_space
+        last_was_space := FALSE
+        LET c := source[i]
+        IF c IN [",", ":", ";", ")", "("] THEN
+            t.type := TokenType.Special
+            t.value := c
+            tokens.append(t)
+            INC i
+        ELSIF c = "\n" THEN
+            IF tokens.size() > 0 AND tokens[LAST].type = TokenType.Special AND tokens[LAST].value = "," THEN
+                -- Comma continuation, delete last token.
+                tokens.resize(tokens.size() - 1)
+                last_was_space := TRUE
+            ELSE
+                t.type := TokenType.Special
+                t.value := ";"
+                tokens.append(t)
+            END IF
+            INC i
+            INC line
+        ELSIF is_general_letter(c) THEN
+            t.type := TokenType.Var_symbol
+            WHILE i < source.length() AND is_var_symbol_char(source[i]) DO
+                t.value.append(source[i])
+                INC i
+            END WHILE
+            t.value := string.upper(t.value)
+            IF i < source.length() AND source[i] = ":" THEN
+                t.type := TokenType.Label
+                INC i
+            END IF
+            tokens.append(t)
+        ELSIF is_digit(c) OR c = "." THEN
+            t.type := TokenType.Const_symbol
+            WHILE i < source.length() DO
+                IF source[i] IN ["E","e"] AND source[i+1] IN ["+","-"] THEN
+                    t.value.append(source[i TO i+1])
+                    i := i + 2
+                ELSIF is_var_symbol_char(source[i]) THEN
+                    t.value.append(source[i])
+                    INC i
+                ELSE
+                    EXIT WHILE
+                END IF
+            END WHILE
+            IF i < source.length() AND source[i] = ":" THEN
+                t.type := TokenType.Label
+                INC i
+            END IF
+            tokens.append(t)
+        ELSIF c IN ["'", "\""] THEN
+            LET delim: String := c
+            INC i
+            t.type := TokenType.String
+            LOOP
+                IF i >= source.length() THEN
+                    error((IF delim = "'" THEN 6.2 ELSE 6.3))
+                END IF
+                IF source[i] = delim THEN
+                    IF i+1 < source.length() AND source[i+1] = delim THEN
+                        t.value.append(delim)
+                        i := i + 2
+                    ELSE
+                        EXIT LOOP
+                    END IF
+                ELSE
+                    t.value.append(source[i])
+                    INC i
+                END IF
+            END LOOP
+            INC i
+            IF i < source.length() AND source[i] IN ["B", "b"] AND (i+1 >= source.length() OR NOT is_var_symbol_char(source[i+1])) THEN
+                t.type := TokenType.String
+                t.value := convert_binary_string(t.value)
+                INC i
+            ELSIF i < source.length() AND source[i] IN ["X", "x"] AND (i+1 >= source.length() OR NOT is_var_symbol_char(source[i+1])) THEN
+                t.type := TokenType.String
+                t.value := convert_hex_string(t.value)
+                INC i
+            END IF
+            tokens.append(t)
+        ELSIF source[i] IN ["+", "-", "%", "|", "&", "=", "\\", "^", ">", "<", "/", "*"] THEN
+            IF c = "/" AND source[i+1] = "*" THEN
+                VAR level: Number := 0
+                REPEAT
+                    IF i+1 >= source.length() THEN
+                        error(6.1)
+                    END IF
+                    IF source[i] = "/" AND source[i+1] = "*" THEN
+                        INC level
+                        i := i + 2
+                    ELSIF source[i] = "*" AND source[i+1] = "/" THEN
+                        DEC level
+                        i := i + 2
+                    ELSIF source[i] = "\n" THEN
+                        INC line
+                        INC i
+                    ELSE
+                        INC i
+                    END IF
+                UNTIL level = 0
+            ELSE
+                t.type := TokenType.Operator
+                CASE c
+                    WHEN "|" DO
+                        CASE source[i+1]
+                            WHEN "|" DO
+                                t.value := "||"
+                                i := i + 1
+                            WHEN OTHERS DO
+                                t.value := "|"
+                        END CASE
+                    WHEN "/" DO
+                        CASE source[i+1]
+                            WHEN "/" DO
+                                t.value := "//"
+                                i := i + 1
+                            WHEN OTHERS DO
+                                t.value := "/"
+                        END CASE
+                    WHEN "*" DO
+                        CASE source[i+1]
+                            WHEN "*" DO
+                                t.value := "**"
+                                i := i + 1
+                            WHEN OTHERS DO
+                                t.value := "*"
+                        END CASE
+                    WHEN "\\", "^" DO
+                        CASE source[i+1]
+                            WHEN "=" DO
+                                CASE source[i+2]
+                                    WHEN "=" DO
+                                        t.value := "\\=="
+                                        i := i + 2
+                                    WHEN OTHERS DO
+                                        t.value := "\\="
+                                        i := i + 1
+                                END CASE
+                            WHEN "<" DO
+                                ASSERT FALSE, "unimplemented <"
+                            WHEN ">" DO
+                                ASSERT FALSE, "unimplemented >"
+                            WHEN OTHERS DO
+                                t.value := "\\"
+                        END CASE
+                    WHEN ">" DO
+                        CASE source[i+1]
+                            WHEN "<" DO
+                                t.value := "><"
+                                i := i + 1
+                            WHEN ">" DO
+                                CASE source[i+2]
+                                    WHEN "=" DO
+                                        t.value := ">>="
+                                        i := i + 2
+                                    WHEN OTHERS DO
+                                        t.value := ">>"
+                                        i := i + 1
+                                END CASE
+                            WHEN "=" DO
+                                t.value := ">="
+                                i := i + 1
+                            WHEN OTHERS DO
+                                t.value := ">"
+                        END CASE
+                    WHEN "<" DO
+                        CASE source[i+1]
+                            WHEN ">" DO
+                                t.value := "<>"
+                                i := i + 1
+                            WHEN "<" DO
+                                CASE source[i+2]
+                                    WHEN "=" DO
+                                        t.value := "<<="
+                                        i := i + 2
+                                    WHEN OTHERS DO
+                                        t.value := "<<"
+                                        i := i + 1
+                                END CASE
+                            WHEN "=" DO
+                                t.value := "<="
+                                i := i + 1
+                            WHEN OTHERS DO
+                                t.value := "<"
+                        END CASE
+                    WHEN "=" DO
+                        CASE source[i+1]
+                            WHEN "=" DO
+                                t.value := "=="
+                                i := i + 1
+                            WHEN OTHERS DO
+                                t.value := "="
+                        END CASE
+                    WHEN "&" DO
+                        CASE source[i+1]
+                            WHEN "&" DO
+                                t.value := "&&"
+                                i := i + 1
+                            WHEN OTHERS DO
+                                t.value := "&"
+                        END CASE
+                    WHEN OTHERS DO
+                        t.value := c
+                END CASE
+                tokens.append(t)
+                INC i
+            END IF
+        ELSIF c IN [" "] THEN
+            INC i
+            last_was_space := TRUE
+        ELSE
+            error(13.1, {"char": c, "hex-encoding": base.toHex(string.toCodePoint(c))})
+        END IF
+    END WHILE
+    RETURN tokens
+END FUNCTION
+
+FUNCTION make_label_index(tokens: Array<Token>): Dictionary<Number>
+    VAR r: Dictionary<Number> := {}
+    FOREACH t IN tokens INDEX i DO
+        IF t.type = TokenType.Label AND t.value NOT IN r THEN
+            r[t.value] := i
+        END IF
+    END FOREACH
+    RETURN r
+END FUNCTION
+
+FUNCTION get_var(name: String): String
+    LET dot: Number := string.find(name, ".")
+    IF dot < 0 OR dot = name.length() - 1 THEN
+        IF name NOT IN vars THEN
+            RETURN name
+        END IF
+        RETURN vars[name]
+    END IF
+    LET stem: String := name[FIRST TO dot]
+    VAR items: Array<String> := string.split(name[dot+1 TO LAST], ".")
+    FOR i := 0 TO items.size() - 1 DO
+        items[i] := get_var(items[i])
+    END FOR
+    LET tail: String := string.join(items, ".")
+    IF stem NOT IN arrays THEN
+        IF stem IN vars THEN
+            RETURN vars[stem]
+        END IF
+        RETURN stem & tail
+    END IF
+    IF tail NOT IN arrays[stem] THEN
+        IF stem IN vars THEN
+            RETURN vars[stem]
+        END IF
+        RETURN stem & tail
+    END IF
+    RETURN arrays[stem][tail]
+END FUNCTION
+
+FUNCTION set_var(name: String, value: String)
+    --print("set_var \(name) \(value)")
+    LET dot: Number := string.find(name, ".")
+    IF dot < 0 OR dot = name.length() - 1 THEN
+        vars[name] := value
+        EXIT FUNCTION
+    END IF
+    LET stem: String := name[FIRST TO dot]
+    VAR items: Array<String> := string.split(name[dot+1 TO LAST], ".")
+    FOR i := 0 TO items.size() - 1 DO
+        items[i] := get_var(items[i])
+    END FOR
+    LET tail: String := string.join(items, ".")
+    arrays[stem][tail] := value
+END FUNCTION
+
+FUNCTION rxnum(s: String): Number
+    TRY
+        VAR t: String := s
+        t := string.trim(s)
+        VAR negative := FALSE
+        IF string.hasPrefix(t, "+") THEN
+            t := string.trim(t[FIRST+1 TO LAST])
+        ELSIF string.hasPrefix(t, "-") THEN
+            negative := TRUE
+            t := string.trim(t[FIRST+1 TO LAST])
+        END IF
+        IF t = "" OR t = "." THEN
+            error(41)
+            RETURN 0
+        END IF
+        IF string.hasPrefix(t, ".") THEN
+            t := "0" & t
+        END IF
+        IF string.hasSuffix(t, ".") THEN
+            t := t[FIRST TO LAST-1]
+        END IF
+        IF NOT is_digit(t[0]) THEN
+            error(41)
+            RETURN 0
+        END IF
+        LET r := num(t)
+        IF negative THEN
+            RETURN -r
+        ELSE
+            RETURN r
+        END IF
+    TRAP ValueRangeException DO
+        error(41)
+    END TRY
+    RETURN 0
+END FUNCTION
+
+FUNCTION is_number(s: String, OUT n: Number): Boolean
+    n := 0
+    TRY
+        n := rxnum(s)
+        RETURN TRUE
+    TRAP SignalException DO
+        RETURN FALSE
+    END TRY
+END FUNCTION
+
+FUNCTION find_label(tokens: Array<Token>, label: String, OUT index: Number): Boolean
+    index := -1
+    IF label IN label_index THEN
+        index := label_index[label]
+        RETURN TRUE
+    END IF
+    RETURN FALSE
+END FUNCTION
+
+FUNCTION change_radix(s: String, from_radix: Number, to_radix: Number): String
+    CONSTANT Digits: String := "0123456789ABCDEF"
+    VAR n: Number := 0
+    FOREACH c IN string.upper(s) DO
+        IF c = " " THEN
+            NEXT FOREACH
+        END IF
+        LET d := string.find(Digits, c)
+        ASSERT d < from_radix
+        n := n * from_radix + d
+    END FOREACH
+    VAR r: String := ""
+    WHILE n > 0 DO
+        r := Digits[n MOD to_radix] & r
+        n := n INTDIV to_radix
+    END WHILE
+    IF to_radix = 10 AND r = "" THEN
+        r := "0"
+    END IF
+    IF from_radix = 16 AND to_radix = 2 THEN
+        WHILE r.length() MOD 4 > 0 DO
+            r := "0" & r
+        END WHILE
+    END IF
+    RETURN r
+END FUNCTION
+
+FUNCTION find_words(s: String): Array<Number>
+    VAR wordstarts: Array<Number> := []
+    VAR inword := FALSE
+    FOREACH c IN s INDEX i DO
+        IF inword AND c = " " THEN
+            inword := FALSE
+        ELSIF NOT inword AND c <> " " THEN
+            wordstarts.append(i)
+            inword := TRUE
+        END IF
+    END FOREACH
+    RETURN wordstarts
+END FUNCTION
+
+FUNCTION builtin_abbrev(args: Array<String>): String
+    LET information: String := args[0]
+    LET info: String := args[1]
+    LET length: Number := (IF args.size() >= 3 THEN rxnum(args[2]) ELSE 0)
+    CHECK info.length() >= length ELSE
+        RETURN "0"
+    END CHECK
+    CHECK info.length() <= information.length() ELSE
+        RETURN "0"
+    END CHECK
+    RETURN (IF info = information[FIRST TO info.length()-1] THEN "1" ELSE "0")
+END FUNCTION
+
+FUNCTION builtin_abs(args: Array<String>): String
+    RETURN str(math.abs(rxnum(args[0])))
+END FUNCTION
+
+FUNCTION builtin_address(args: Array<String>): String
+    RETURN current_environment
+END FUNCTION
+
+FUNCTION builtin_arg(args: Array<String>): String
+    IF args.size() = 0 THEN
+        RETURN str(contexts[LAST].call_args.size())
+    END IF
+    LET n: Number := rxnum(args[0]) - 1
+    IF args.size() = 1 THEN
+        IF n < contexts[LAST].call_args.size() THEN
+            RETURN contexts[LAST].call_args[n]
+        ELSE
+            RETURN ""
+        END IF
+    ELSE
+        LET option: String := args[1]
+        -- TODO: make distinction between optional and empty string?
+        CASE option
+            WHEN "E", "e" DO
+                RETURN (IF n < contexts[LAST].call_args.size() AND contexts[LAST].call_args[n] <> "" THEN "1" ELSE "0")
+            WHEN "O", "o" DO
+                RETURN (IF n >= contexts[LAST].call_args.size() OR contexts[LAST].call_args[n] = "" THEN "1" ELSE "0")
+            WHEN OTHERS DO
+                ASSERT FALSE, option
+                RETURN ""
+        END CASE
+    END IF
+END FUNCTION
+
+FUNCTION builtin_b2x(args: Array<String>): String
+    RETURN change_radix(args[0], 2, 16)
+END FUNCTION
+
+FUNCTION builtin_bitand(args: Array<String>): String
+    LET string1: String := args[0]
+    LET string2: String := (IF args.size() >= 2 THEN args[1] ELSE "")
+    LET pad: String := (IF args.size() >= 3 THEN args[2] ELSE "")
+    VAR a1: Array<Number> := []
+    FOREACH c IN string1 DO
+        a1.append(string.toCodePoint(c))
+    END FOREACH
+    VAR a2: Array<Number> := []
+    FOREACH c IN string2 DO
+        a2.append(string.toCodePoint(c))
+    END FOREACH
+    VAR r: Array<Number> := []
+    FOR i := 0 TO math.max(a1.size(), a2.size())-1 DO
+        LET b1: Number := (IF i < a1.size() THEN a1[i] ELSE (IF pad <> "" THEN string.toCodePoint(pad) ELSE a2[i]))
+        LET b2: Number := (IF i < a2.size() THEN a2[i] ELSE (IF pad <> "" THEN string.toCodePoint(pad) ELSE a1[i]))
+        r.append(binary.and32(b1, b2))
+    END FOR
+    VAR s: String := ""
+    FOREACH b IN r DO
+        s.append(string.fromCodePoint(b))
+    END FOREACH
+    RETURN s
+END FUNCTION
+
+FUNCTION builtin_bitor(args: Array<String>): String
+    LET string1: String := args[0]
+    LET string2: String := (IF args.size() >= 2 THEN args[1] ELSE "")
+    LET pad: String := (IF args.size() >= 3 THEN args[2] ELSE "")
+    VAR a1: Array<Number> := []
+    FOREACH c IN string1 DO
+        a1.append(string.toCodePoint(c))
+    END FOREACH
+    VAR a2: Array<Number> := []
+    FOREACH c IN string2 DO
+        a2.append(string.toCodePoint(c))
+    END FOREACH
+    VAR r: Array<Number> := []
+    FOR i := 0 TO math.max(a1.size(), a2.size())-1 DO
+        LET b1: Number := (IF i < a1.size() THEN a1[i] ELSE (IF pad <> "" THEN string.toCodePoint(pad) ELSE a2[i]))
+        LET b2: Number := (IF i < a2.size() THEN a2[i] ELSE (IF pad <> "" THEN string.toCodePoint(pad) ELSE a1[i]))
+        r.append(binary.or32(b1, b2))
+    END FOR
+    VAR s: String := ""
+    FOREACH b IN r DO
+        s.append(string.fromCodePoint(b))
+    END FOREACH
+    RETURN s
+END FUNCTION
+
+FUNCTION builtin_bitxor(args: Array<String>): String
+    LET string1: String := args[0]
+    LET string2: String := (IF args.size() >= 2 THEN args[1] ELSE "")
+    LET pad: String := (IF args.size() >= 3 THEN args[2] ELSE "")
+    VAR a1: Array<Number> := []
+    FOREACH c IN string1 DO
+        a1.append(string.toCodePoint(c))
+    END FOREACH
+    VAR a2: Array<Number> := []
+    FOREACH c IN string2 DO
+        a2.append(string.toCodePoint(c))
+    END FOREACH
+    VAR r: Array<Number> := []
+    FOR i := 0 TO math.max(a1.size(), a2.size())-1 DO
+        LET b1: Number := (IF i < a1.size() THEN a1[i] ELSE (IF pad <> "" THEN string.toCodePoint(pad) ELSE a2[i]))
+        LET b2: Number := (IF i < a2.size() THEN a2[i] ELSE (IF pad <> "" THEN string.toCodePoint(pad) ELSE a1[i]))
+        r.append(binary.xor32(b1, b2))
+    END FOR
+    VAR s: String := ""
+    FOREACH b IN r DO
+        s.append(string.fromCodePoint(b))
+    END FOREACH
+    RETURN s
+END FUNCTION
+
+FUNCTION builtin_c2d(args: Array<String>): String
+    LET s: String := args[0]
+    LET length: Number := (IF args.size() >= 2 THEN rxnum(args[1]) ELSE s.length())
+    LET start: Number := math.max(0, s.length()-length)
+    LET sign: Boolean := (IF start < s.length() THEN string.toCodePoint(s[start]) >= 0x80 ELSE FALSE)
+    VAR n: Number := 0
+    FOR i := start TO s.length()-1 DO
+        LET b: Number := string.toCodePoint(s[i])
+        n := n * 0x100 + b
+    END FOR
+    IF args.size() >= 2 AND length <= s.length() AND sign THEN
+        n := n - 2^(8*length)
+    END IF
+    RETURN str(n)
+END FUNCTION
+
+FUNCTION builtin_c2x(args: Array<String>): String
+    LET s: String := args[0]
+    LET length: Number := (IF args.size() >= 2 THEN rxnum(args[1]) ELSE s.length())
+    IF s = "" THEN
+        RETURN ""
+    END IF
+    LET start: Number := math.max(0, s.length()-length)
+    VAR n: Number := 0
+    FOR i := start TO s.length()-1 DO
+        LET b: Number := string.toCodePoint(s[i])
+        n := n * 0x100 + b
+    END FOR
+    VAR r: String := string.upper(base.toHex(n))
+    IF math.odd(r.length()) THEN
+        r := "0" & r
+    END IF
+    RETURN r
+END FUNCTION
+
+FUNCTION builtin_center(args: Array<String>): String
+    LET s: String := args[0]
+    LET length: Number := rxnum(args[1])
+    LET pad: String := (IF args.size() >= 3 AND args[2] <> "" THEN args[2] ELSE " ")
+    IF s.length() < length THEN
+        LET half: Number := (length - s.length()) INTDIV 2
+        RETURN string.repeat(pad, half) & s & string.repeat(pad, length - s.length() - half)
+    ELSE
+        LET start: Number := (s.length() - length) INTDIV 2
+        RETURN s[start TO start+length-1]
+    END IF
+END FUNCTION
+
+FUNCTION builtin_charin(args: Array<String>): String
+    RETURN ""
+END FUNCTION
+
+FUNCTION builtin_charout(args: Array<String>): String
+    IF args[0] = "" THEN
+        io.write(io.stdout, args[1])
+        io.flush(io.stdout)
+        RETURN str(args[1].length())
+    ELSE
+        -- TODO ASSERT FALSE, "charout only to stdout", args
+        RETURN ""
+    END IF
+END FUNCTION
+
+FUNCTION builtin_changestr(args: Array<String>): String
+    RETURN string.replaceAll(args[1], args[0], args[2])
+END FUNCTION
+
+FUNCTION builtin_compare(args: Array<String>): String
+    VAR s1 := args[0]
+    VAR s2 := args[1]
+    LET pad := (IF args.size() >= 3 THEN args[2] ELSE " ")
+    IF s1.length() < s2.length() THEN
+        s1.append(string.repeat(pad, s2.length() - s1.length()))
+    ELSIF s2.length() < s1.length() THEN
+        s2.append(string.repeat(pad, s1.length() - s2.length()))
+    END IF
+    ASSERT s1.length() = s2.length()
+    FOR i := 0 TO s1.length() - 1 DO
+        IF s1[i] <> s2[i] THEN
+            RETURN str(i + 1)
+        END IF
+    END FOR
+    RETURN "0"
+END FUNCTION
+
+FUNCTION builtin_condition(args: Array<String>): String
+    LET option := (IF args.size() >= 1 AND args[0] <> "" THEN string.upper(args[0]) ELSE "I")
+    CASE option
+        WHEN "C" DO
+            RETURN current_condition.name
+        WHEN "D" DO
+            RETURN ConditionDescription[current_condition.name]
+        WHEN "I" DO
+            RETURN current_condition.instruction
+        WHEN "S" DO
+            RETURN current_condition.state
+        WHEN OTHERS DO
+            ASSERT FALSE, option
+    END CASE
+    RETURN ""
+END FUNCTION
+
+FUNCTION builtin_copies(args: Array<String>): String
+    RETURN string.repeat(args[0], rxnum(args[1]))
+END FUNCTION
+
+FUNCTION builtin_countstr(args: Array<String>): String
+    LET needle := args[0]
+    LET haystack := args[1]
+    CHECK needle <> "" ELSE
+        RETURN "0"
+    END CHECK
+    VAR r := 0
+    VAR i := 0
+    WHILE i <= haystack.length() - needle.length() DO
+        IF haystack[i TO i + needle.length() - 1] = needle THEN
+            INC r
+            i := i + needle.length()
+        ELSE
+            INC i
+        END IF
+    END WHILE
+    RETURN str(r)
+END FUNCTION
+
+FUNCTION builtin_d2c(args: Array<String>): String
+    VAR n := rxnum(args[0])
+    LET length := (IF args.size() >= 2 THEN rxnum(args[1]) ELSE -1)
+    VAR r := ""
+    IF n < 0 THEN
+        ASSERT length > 0
+        n := 2^(8*length) + n
+    END IF
+    WHILE n > 0 DO
+        r := string.fromCodePoint(n MOD 0x100) & r
+        n := n INTDIV 0x100
+    END WHILE
+    RETURN r
+END FUNCTION
+
+FUNCTION builtin_d2x(args: Array<String>): String
+    VAR n := rxnum(args[0])
+    LET length := (IF args.size() >= 2 THEN rxnum(args[1]) ELSE -1)
+    VAR r := ""
+    IF n < 0 THEN
+        ASSERT length > 0
+        n := 2^(8*length) + n
+    END IF
+    WHILE n > 0 DO
+        r := string.upper(base.toHex(n MOD 0x100)) & r
+        n := n INTDIV 0x100
+    END WHILE
+    --IF length >= 0 THEN
+    --    RETURN r[LAST-length TO LAST]
+    --ELSE
+        RETURN r
+    --END IF
+END FUNCTION
+
+FUNCTION builtin_datatype(args: Array<String>): String
+    LET s := args[0]
+    LET type := (IF args.size() >= 2 THEN args[1] ELSE "")
+    IF type = "" THEN
+        TRY
+            _ := rxnum(s)
+            RETURN "NUM"
+        TRAP SignalException.Syntax DO
+            RETURN "CHAR"
+        END TRY
+    END IF
+    FUNCTION all(t: String, chars: String): String
+        IF t = "" THEN
+            RETURN "0"
+        END IF
+        FOREACH c IN t DO
+            IF c NOT IN chars THEN
+                RETURN "0"
+            END IF
+        END FOREACH
+        RETURN "1"
+    END FUNCTION
+    CASE string.upper(type)
+        WHEN "A" DO -- Alphanumeric
+            RETURN all(s, "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")
+        WHEN "B" DO -- Binary
+            TRY
+                _ := convert_binary_string(s)
+                RETURN "1"
+            TRAP SignalException.Syntax DO
+                RETURN "0"
+            END TRY
+        WHEN "L" DO -- Lowercase
+            RETURN all(s, "abcdefghijklmnopqrstuvwxyz")
+        WHEN "M" DO -- Mixed case
+            RETURN all(s, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")
+        WHEN "N" DO -- Number
+            TRY
+                _ := rxnum(s)
+                RETURN "1"
+            TRAP SignalException.Syntax DO
+                RETURN "0"
+            END TRY
+        WHEN "S" DO -- Symbol
+            IF tokenise(s).size() = 1 THEN
+                RETURN "1"
+            ELSE
+                RETURN "0"
+            END IF
+        WHEN "U" DO -- Uppercase
+            RETURN all(s, "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+        WHEN "W" DO -- Whole number
+            TRY
+                LET n := rxnum(s)
+                RETURN all(str(n), "-0123456789")
+            TRAP SignalException.Syntax DO
+                RETURN "0"
+            END TRY
+        WHEN "X" DO -- Hexadecimal
+            TRY
+                _ := convert_hex_string(s)
+                RETURN "1"
+            TRAP SignalException.Syntax DO
+                RETURN "0"
+            END TRY
+    END CASE
+    RETURN "0"
+END FUNCTION
+
+FUNCTION builtin_date(args: Array<String>): String
+    LET option_out := (IF args.size() >= 1 AND args[0] <> "" THEN string.upper(args[0]) ELSE "N")
+    LET now := datetime.now()
+    CASE option_out
+        WHEN "D" DO
+            RETURN str((now.instant - datetime.makeFromParts(datetime.DateTime(year WITH now.year, month WITH 1, day WITH 1)).instant) INTDIV 86400 + 1)
+        WHEN "E" DO
+            RETURN "\(now.day:02d)/\(now.month:02d)/\(now.year MOD 100:02d)"
+        WHEN "M" DO
+            RETURN datetime.MonthNames[now.month]
+        WHEN "N" DO
+            RETURN "\(now.day:02d) \(datetime.MonthNames[now.month][FIRST TO 2]) \(now.year:04d)"
+        WHEN "O" DO
+            RETURN "\(now.year MOD 100:02d)/\(now.month:02d)/\(now.day:02d)"
+        WHEN "S" DO
+            RETURN "\(now.year:04d)\(now.month:02d)\(now.day:02d)"
+        WHEN "U" DO
+            RETURN "\(now.month:02d)/\(now.day:02d)/\(now.year MOD 100:02d)"
+        WHEN "W" DO
+            RETURN datetime.WeekdayNames[now.weekday]
+        WHEN OTHERS DO
+            ASSERT FALSE, option_out
+    END CASE
+    RETURN ""
+END FUNCTION
+
+FUNCTION builtin_delstr(args: Array<String>): String
+    LET s := args[0]
+    LET start := rxnum(args[1]) - 1
+    LET length := (IF args.size() >= 3 THEN rxnum(args[2]) ELSE -1)
+    IF start >= s.length() THEN
+        RETURN s
+    END IF
+    IF length < 0 OR start + length >= s.length() THEN
+        RETURN s[FIRST TO start-1]
+    END IF
+    RETURN s[FIRST TO start-1] & s[start+length TO LAST]
+END FUNCTION
+
+FUNCTION builtin_delword(args: Array<String>): String
+    LET s := args[0]
+    LET start := rxnum(args[1])
+    LET length := (IF args.size() >= 3 THEN rxnum(args[2]) ELSE -1)
+    LET wordstarts := find_words(s)
+    IF start >= wordstarts.size() THEN
+        RETURN s
+    END IF
+    IF length < 0 OR start + length >= wordstarts.size() THEN
+        RETURN s[FIRST TO wordstarts[start]-1]
+    END IF
+    RETURN s[FIRST TO wordstarts[start]-1] & s[wordstarts[start+length] TO LAST]
+END FUNCTION
+
+FUNCTION builtin_digits(args: Array<String>): String
+    RETURN str(numeric_digits)
+END FUNCTION
+
+FUNCTION builtin_errortext(args: Array<String>): String
+    CHECK args[0] IN ErrorText ELSE
+        RETURN ""
+    END CHECK
+    RETURN ErrorText[args[0]]
+END FUNCTION
+
+FUNCTION builtin_find(args: Array<String>): String
+    RETURN builtin_wordpos([args[1], args[0]] & args[2 TO LAST])
+END FUNCTION
+
+FUNCTION builtin_form(args: Array<String>): String
+    RETURN string.upper(numeric_form.toString())
+END FUNCTION
+
+FUNCTION builtin_format(args: Array<String>): String
+    -- TODO: actually format
+    RETURN args[0]
+END FUNCTION
+
+FUNCTION builtin_fuzz(args: Array<String>): String
+    RETURN str(numeric_fuzz)
+END FUNCTION
+
+FUNCTION builtin_getpid(args: Array<String>): String
+    IF IMPORTED posix THEN
+        RETURN str(posix.getpid())
+    ELSE
+        RETURN "0"
+    END IF
+END FUNCTION
+
+FUNCTION builtin_insert(args: Array<String>): String
+    VAR s := args[0]
+    LET target := args[1]
+    LET position := (IF args.size() >= 3 AND args[2] <> "" THEN rxnum(args[2]) ELSE 0)
+    LET length := (IF args.size() >= 4 AND args[3] <> "" THEN rxnum(args[3]) ELSE s.length())
+    LET pad := (IF args.size() >= 5 AND args[4] <> "" THEN args[4] ELSE " ")
+    IF length < s.length() THEN
+        s := s[0 TO length-1]
+    ELSIF length > s.length() THEN
+        s.append(string.repeat(pad, length - s.length()))
+    END IF
+    IF position >= target.length() THEN
+        RETURN target & string.repeat(pad, position - target.length()) & s
+    END IF
+    RETURN target[FIRST TO position-1] & s & target[position TO LAST]
+END FUNCTION
+
+FUNCTION builtin_lastpos(args: Array<String>): String
+    LET needle := args[0]
+    LET haystack := args[1]
+    LET start := (IF args.size() >= 3 AND args[2] <> "" THEN rxnum(args[2])-1 ELSE haystack.length())
+    IF needle = "" THEN
+        RETURN "0"
+    END IF
+    FOR i := math.min(start, haystack.length()-1)-(needle.length()-1) TO 0 STEP -1 DO
+        IF haystack[i TO i+needle.length()-1] = needle THEN
+            RETURN str(i + 1)
+        END IF
+    END FOR
+    RETURN "0"
+END FUNCTION
+
+FUNCTION builtin_left(args: Array<String>): String
+    LET s := args[0]
+    LET length := rxnum(args[1])
+    LET pad := (IF args.size() >= 3 AND args[2] <> "" THEN args[2] ELSE " ")
+    IF length <= s.length() THEN
+        RETURN s[FIRST TO length-1]
+    ELSE
+        RETURN s & string.repeat(pad, length - s.length())
+    END IF
+END FUNCTION
+
+FUNCTION builtin_length(args: Array<String>): String
+    RETURN str(args[0].length())
+END FUNCTION
+
+FUNCTION builtin_linein(args: Array<String>): String
+    LET name := args[0]
+    LET line := (IF args.size() >= 2 THEN rxnum(args[1]) ELSE 0)
+    LET count := (IF args.size() >= 3 THEN rxnum(args[2]) ELSE 1)
+    IF name NOT IN streams THEN
+        streams[name] := textio.open(name, textio.Mode.read)
+    END IF
+    IF line > 0 THEN
+        textio.seekStart(streams[name])
+        FOR i := 1 TO line-1 DO
+            IF NOT textio.readLine(streams[name], OUT _) THEN
+                EXIT FOR
+            END IF
+        END FOR
+    END IF
+    VAR r: String := ""
+    IF count = 1 THEN
+        IF NOT textio.readLine(streams[name], OUT r) THEN
+            IF "NOTREADY" IN signal_handlers THEN
+                RAISE SignalException.Notready
+            END IF
+        END IF
+    END IF
+    RETURN r
+END FUNCTION
+
+FUNCTION builtin_lineout(args: Array<String>): String
+    LET name := args[0]
+    LET s := (IF args.size() >= 2 THEN args[1] ELSE "")
+    LET line := (IF args.size() >= 3 THEN rxnum(args[2]) ELSE 0)
+    IF args.size() >= 2 THEN
+        IF name NOT IN streams THEN
+            CASE name
+                WHEN "", "<stdout>" DO
+                    streams[name] := textio.stdout
+                WHEN "<stderr>" DO
+                    streams[name] := textio.stderr
+                WHEN OTHERS DO
+                    TRY
+                        streams[name] := textio.open(name, textio.Mode.readwrite)
+                    TRAP textio.TextioException.Open DO
+                        TRY
+                            streams[name] := textio.open(name, textio.Mode.write)
+                        TRAP textio.TextioException.Open DO
+                            RAISE SignalException.Notready
+                        END TRY
+                    END TRY
+            END CASE
+        END IF
+        FOR i := 2 TO line DO
+            _ := textio.readLine(streams[name], OUT _)
+        END FOR
+        textio.writeLine(streams[name], s)
+        TRY
+            textio.truncate(streams[name])
+        TRAP textio.TextioException.Write DO
+            -- ignore
+        END TRY
+    ELSE
+        IF name IN streams THEN
+            textio.close(streams[name])
+        END IF
+        streams.remove(name)
+    END IF
+    RETURN "0"
+END FUNCTION
+
+FUNCTION builtin_lines(args: Array<String>): String
+    RETURN str(file.readLines(args[0]).size())
+END FUNCTION
+
+FUNCTION builtin_lower(args: Array<String>): String
+    VAR s := args[0]
+    LET pos := (IF args.size() >= 2 AND args[1] <> "" THEN rxnum(args[1])-1 ELSE 0)
+    LET length := (IF args.size() >= 3 AND args[2] <> "" THEN rxnum(args[2]) ELSE s.length() - pos)
+    LET pad := (IF args.size() >= 4 AND args[3] <> "" THEN args[3] ELSE " ")
+    IF pos + length > s.length() THEN
+        s.append(string.repeat(pad, pos + length - s.length()))
+    END IF
+    IF pos+length < s.length() THEN
+        RETURN s[FIRST TO pos-1] & string.lower(s[pos TO pos+length-1]) & s[pos+length TO LAST]
+    ELSE
+        RETURN s[FIRST TO pos-1] & string.lower(s[pos TO pos+length-1])
+    END IF
+END FUNCTION
+
+FUNCTION builtin_max(args: Array<String>): String
+    VAR r := rxnum(args[0])
+    FOR i := 1 TO args.size()-1 DO
+        LET x := rxnum(args[i])
+        IF x > r THEN
+            r := x
+        END IF
+    END FOR
+    RETURN str(r)
+END FUNCTION
+
+FUNCTION builtin_min(args: Array<String>): String
+    VAR r := rxnum(args[0])
+    FOR i := 1 TO args.size()-1 DO
+        LET x := rxnum(args[i])
+        IF x < r THEN
+            r := x
+        END IF
+    END FOR
+    RETURN str(r)
+END FUNCTION
+
+FUNCTION builtin_overlay(args: Array<String>): String
+    VAR string1 := args[0]
+    LET string2 := args[1]
+    LET start := (IF args.size() >= 3 AND args[2] <> "" THEN rxnum(args[2])-1 ELSE 0)
+    LET length := (IF args.size() >= 4 AND args[3] <> "" THEN rxnum(args[3]) ELSE string1.length())
+    LET pad := (IF args.size() >= 5 AND args[4] <> "" THEN args[4] ELSE " ")
+    IF length < string1.length() THEN
+        string1 := string1[FIRST TO length-1]
+    ELSIF length > string1.length() THEN
+        string1.append(string.repeat(pad, length - string1.length()))
+    END IF
+    IF start >= string2.length() THEN
+        RETURN string2 & string.repeat(pad, start - string2.length()) & string1
+    ELSIF start + string1.length() >= string2.length() THEN
+        RETURN string2[FIRST TO start-1] & string1
+    ELSE
+        RETURN string2[FIRST TO start-1] & string1 & string2[start+string1.length() TO LAST]
+    END IF
+END FUNCTION
+
+FUNCTION builtin_pos(args: Array<String>): String
+    LET needle := args[0]
+    LET haystack := args[1]
+    LET start := (IF args.size() >= 3 AND args[2] <> "" THEN rxnum(args[2])-1 ELSE 0)
+    IF needle = "" THEN
+        RETURN "0"
+    END IF
+    FOR i := start TO haystack.length()-needle.length() DO
+        IF haystack[i TO i+needle.length()-1] = needle THEN
+            RETURN str(i + 1)
+        END IF
+    END FOR
+    RETURN "0"
+END FUNCTION
+
+VAR using_lfsr: Boolean := FALSE
+VAR random_seed: Number := 0
+
+FUNCTION random_lfsr(): Number
+    random_seed := (random_seed * 22695477 + 1) MOD 2^32
+    RETURN random_seed INTDIV 2^16
+END FUNCTION
+
+FUNCTION builtin_queued(args: Array<String>): String
+    RETURN str(queue.size())
+END FUNCTION
+
+FUNCTION builtin_random(args: Array<String>): String
+    LET min: Number := (IF args.size() >= 1 AND args[0] <> "" THEN rxnum(args[0]) ELSE 0)
+    LET max: Number := (IF args.size() >= 2 AND args[1] <> "" THEN rxnum(args[1]) ELSE 999)
+    LET seed: Number := (IF args.size() >= 3 AND args[2] <> "" THEN rxnum(args[2]) ELSE 0)
+    IF seed <> 0 THEN
+        random_seed := seed
+        using_lfsr := TRUE
+    END IF
+    IF using_lfsr THEN
+        RETURN str(random_lfsr() MOD (max - min + 1) + min)
+    ELSE
+        RETURN str(random.uint32() MOD (max - min + 1) + min)
+    END IF
+END FUNCTION
+
+FUNCTION builtin_reverse(args: Array<String>): String
+    LET s := args[0]
+    VAR r := ""
+    FOR i := s.length()-1 TO 0 STEP -1 DO
+        r.append(s[i])
+    END FOR
+    RETURN r
+END FUNCTION
+
+FUNCTION builtin_right(args: Array<String>): String
+    LET s := args[0]
+    LET length := rxnum(args[1])
+    LET pad := (IF args.size() >= 3 AND args[2] <> "" THEN args[2] ELSE " ")
+    IF length = 0 THEN
+        RETURN ""
+    END IF
+    IF length < s.length() THEN
+        RETURN s[s.length()-length TO LAST]
+    ELSE
+        RETURN string.repeat(pad, length - s.length()) & s
+    END IF
+END FUNCTION
+
+FUNCTION builtin_sign(args: Array<String>): String
+    RETURN str(math.sign(rxnum(args[0])))
+END FUNCTION
+
+FUNCTION builtin_sourceline(args: Array<String>): String
+    IF args.size() = 0 THEN
+        RETURN str(sourcelines.size()-1)
+    END IF
+    LET line := rxnum(args[0])
+    RETURN sourcelines[line]
+END FUNCTION
+
+FUNCTION builtin_space(args: Array<String>): String
+    VAR s := args[0]
+    LET length := (IF args.size() >= 2 AND args[1] <> "" THEN rxnum(args[1]) ELSE 1)
+    LET pad := (IF args.size() >= 3 AND args[2] <> "" THEN args[2] ELSE " ")
+    RETURN string.join(string.split(s, " "), string.repeat(pad, length))
+END FUNCTION
+
+FUNCTION builtin_stream(args: Array<String>): String
+    LET name := args[0]
+    LET option := string.upper(args[1])
+    LET command := string.upper(args[2])
+    CASE option
+        WHEN "C" DO
+            LET a := string.split(command, " ")
+            IF command = "OPEN WRITE REPLACE" THEN
+                streams[name] := textio.open(name, textio.Mode.write)
+            ELSIF command = "CLOSE" THEN
+                IF name IN streams THEN
+                    textio.close(streams[name])
+                    streams.remove(name)
+                END IF
+            ELSIF command = "QUERY EXISTS" THEN
+                RETURN (IF file.exists(name) THEN "1" ELSE "0")
+            ELSE
+                ASSERT FALSE, "unknown command", command
+            END IF
+        WHEN "D" DO
+            ASSERT FALSE, "description goes here"
+        WHEN "S" DO
+            IF name IN streams THEN
+                RETURN "READY"
+            ELSE
+                RETURN "UNKNOWN"
+            END IF
+        WHEN OTHERS DO
+            ASSERT FALSE, "unknown option", option
+    END CASE
+    RETURN ""
+END FUNCTION
+
+FUNCTION builtin_strip(args: Array<String>): String
+    LET s := args[0]
+    LET option := (IF args.size() >= 2 AND args[1] <> "" THEN args[1] ELSE "B")
+    LET char := (IF args.size() >= 3 AND args[2] <> "" THEN args[2] ELSE " \n\r\t")
+    LET leading := (IF option IN ["L","B"] THEN char ELSE "")
+    LET trailing := (IF option IN ["T","B"] THEN char ELSE "")
+    RETURN string.trimCharacters(s, leading, trailing)
+END FUNCTION
+
+FUNCTION builtin_substr(args: Array<String>): String
+    LET s := args[0]
+    LET start := rxnum(args[1]) - 1
+    LET length := (IF args.size() >= 3 AND args[2] <> "" THEN rxnum(args[2]) ELSE s.length() - start)
+    LET pad := (IF args.size() >= 4 AND args[3] <> "" THEN args[3] ELSE " ")
+    IF start >= s.length() THEN
+        RETURN ""
+    ELSIF start + length < s.length() THEN
+        RETURN s[start TO start+length-1]
+    ELSE
+        RETURN s[start TO LAST] & string.repeat(pad, start + length - s.length())
+    END IF
+END FUNCTION
+
+FUNCTION builtin_subword(args: Array<String>): String
+    LET s := args[0]
+    LET start := (IF args.size() >= 2 AND args[1] <> "" THEN rxnum(args[1]) ELSE 1)
+    LET length := (IF args.size() >= 3 AND args[2] <> "" THEN rxnum(args[2]) ELSE -1)
+    LET wordstarts := find_words(s)
+    IF start >= wordstarts.size() THEN
+        RETURN ""
+    END IF
+    IF length < 0 OR start + length >= wordstarts.size() THEN
+        RETURN string.trim(s[wordstarts[start]-1 TO LAST])
+    END IF
+    RETURN string.trim(s[wordstarts[start]-1 TO wordstarts[start+length]-1])
+END FUNCTION
+
+FUNCTION builtin_symbol(args: Array<String>): String
+    LET name := args[0]
+    IF name = "" THEN
+        RETURN "BAD"
+    END IF
+    IF NOT is_general_letter(name[0]) THEN
+        RETURN "BAD"
+    END IF
+    FOR i := 2 TO name.length()-1 DO
+        IF NOT is_var_symbol_char(name[i]) THEN
+            RETURN "BAD"
+        END IF
+    END FOR
+    IF name IN vars THEN
+        RETURN "VAR"
+    ELSE
+        RETURN "LIT"
+    END IF
+END FUNCTION
+
+VAR time_reset: Number := 0
+
+FUNCTION builtin_time(args: Array<String>): String
+    LET option_out := (IF args.size() >= 1 AND args[0] <> "" THEN string.upper(args[0]) ELSE "N")
+    LET now := datetime.now()
+    CASE option_out
+        WHEN "C" DO
+            RETURN "\((now.hour + 11) MOD 12 + 1):\(now.minute:02d)\((IF now.hour >= 12 THEN "am" ELSE "pm"))"
+        WHEN "E" DO
+            LET time_now := time.now()
+            RETURN str(time_now - time_reset)
+        WHEN "H" DO
+            RETURN str(now.hour)
+        WHEN "L" DO
+            RETURN "\(now.hour:02d):\(now.minute:02d):\(now.second:02d).0"
+        WHEN "M" DO
+            RETURN str(now.hour * 60 + now.minute)
+        WHEN "N" DO
+            RETURN "\(now.hour:02d):\(now.minute:02d):\(math.trunc(now.second):02d)"
+        WHEN "R" DO
+            LET time_now: Number := time.now()
+            LET r: Number := time_now - time_reset
+            time_reset := time_now
+            RETURN str(r)
+        WHEN "S" DO
+            RETURN str((now.hour * 60 + now.minute) * 60 + math.trunc(now.second))
+        WHEN OTHERS DO
+            ASSERT FALSE, args
+    END CASE
+    RETURN ""
+END FUNCTION
+
+FUNCTION builtin_trace(args: Array<String>): String
+    -- TODO
+    RETURN ""
+END FUNCTION
+
+FUNCTION builtin_translate(args: Array<String>): String
+    LET s := args[0]
+    IF args.size() < 2 THEN
+        RETURN string.upper(s)
+    END IF
+    VAR tableout := args[1]
+    LET tablein := (IF args.size() >= 3 THEN args[2] ELSE builtin_xrange([]))
+    LET pad := (IF args.size() >= 4 THEN args[3] ELSE " ")
+    IF tableout.length() < tablein.length() THEN
+        tableout.append(string.repeat(pad[0], tablein.length() - tableout.length()))
+    END IF
+    VAR r := ""
+    FOREACH c IN s DO
+        LET i := string.find(tablein, c)
+        IF i >= 0 THEN
+            r.append(tableout[i])
+        ELSE
+            r.append(c)
+        END IF
+    END FOREACH
+    RETURN r
+END FUNCTION
+
+FUNCTION builtin_trunc(args: Array<String>): String
+    LET number := rxnum(args[0])
+    LET length := (IF args.size() >= 2 AND args[1] <> "" THEN rxnum(args[1]) ELSE 0)
+    RETURN str(math.round(length, number))
+END FUNCTION
+
+FUNCTION builtin_upper(args: Array<String>): String
+    VAR s := args[0]
+    LET pos := (IF args.size() >= 2 AND args[1] <> "" THEN rxnum(args[1])-1 ELSE 0)
+    LET length := (IF args.size() >= 3 AND args[2] <> "" THEN rxnum(args[2]) ELSE s.length() - pos)
+    LET pad := (IF args.size() >= 4 AND args[3] <> "" THEN args[3] ELSE " ")
+    IF pos + length > s.length() THEN
+        s.append(string.repeat(pad, pos + length - s.length()))
+    END IF
+    IF pos+length < s.length() THEN
+        RETURN s[FIRST TO pos-1] & string.upper(s[pos TO pos+length-1]) & s[pos+length TO LAST]
+    ELSE
+        RETURN s[FIRST TO pos-1] & string.upper(s[pos TO pos+length-1])
+    END IF
+END FUNCTION
+
+FUNCTION builtin_value(args: Array<String>): String
+    LET symbol := string.upper(args[0])
+    LET value := get_var(symbol)
+    IF args.size() >= 2 THEN
+        LET newvalue := args[1]
+        set_var(symbol, newvalue)
+    END IF
+    RETURN value
+END FUNCTION
+
+FUNCTION builtin_verify(args: Array<String>): String
+    LET s := args[0]
+    LET reference := args[1]
+    LET option := (IF args.size() >= 3 AND args[2] <> "" THEN args[2] ELSE "N")
+    LET start := (IF args.size() >= 4 AND args[3] <> "" THEN rxnum(args[3])-1 ELSE 0)
+    CASE option
+        WHEN "N" DO
+            FOR i := start TO s.length()-1 DO
+                IF s[i] NOT IN reference THEN
+                    RETURN str(i + 1)
+                END IF
+            END FOR
+        WHEN "M" DO
+            FOR i := start TO s.length()-1 DO
+                IF s[i] IN reference THEN
+                    RETURN str(i + 1)
+                END IF
+            END FOR
+    END CASE
+    RETURN "0"
+END FUNCTION
+
+FUNCTION builtin_word(args: Array<String>): String
+    LET s := args[0]
+    LET wordno := rxnum(args[1]) - 1
+    LET wordstarts := find_words(s)
+    CHECK 0 <= wordno < wordstarts.size() ELSE
+        RETURN ""
+    END CHECK
+    IF wordno+1 < wordstarts.size() THEN
+        RETURN string.trim(s[wordstarts[wordno] TO wordstarts[wordno+1]-1])
+    ELSE
+        RETURN string.trim(s[wordstarts[wordno] TO LAST])
+    END IF
+END FUNCTION
+
+FUNCTION builtin_wordindex(args: Array<String>): String
+    LET s := args[0]
+    LET wordno := rxnum(args[1]) - 1
+    LET wordstarts := find_words(s)
+    IF 0 <= wordno < wordstarts.size() THEN
+        RETURN str(wordstarts[wordno] + 1)
+    ELSE
+        RETURN "0"
+    END IF
+END FUNCTION
+
+FUNCTION builtin_wordlength(args: Array<String>): String
+    RETURN str(builtin_word(args).length())
+END FUNCTION
+
+FUNCTION builtin_wordpos(args: Array<String>): String
+    LET phrase := args[0]
+    LET s := args[1]
+    LET start := (IF args.size() >= 3 AND args[2] <> "" THEN rxnum(args[2])-1 ELSE 0)
+    LET phrase_words := string.split(phrase, " ")
+    LET string_words := string.split(s, " ")
+    IF phrase_words.size() = 0 THEN
+        RETURN "0"
+    END IF
+    FOR i := start TO string_words.size()-1 DO
+        VAR found := TRUE
+        FOR j := 0 TO phrase_words.size()-1 DO
+            IF i+j >= string_words.size() OR phrase_words[j] <> string_words[i+j] THEN
+                found := FALSE
+                EXIT FOR
+            END IF
+        END FOR
+        IF found THEN
+            RETURN str(i + 1)
+        END IF
+    END FOR
+    RETURN "0"
+END FUNCTION
+
+FUNCTION builtin_words(args: Array<String>): String
+    RETURN str(string.split(args[0], " ").size())
+END FUNCTION
+
+FUNCTION builtin_x2b(args: Array<String>): String
+    RETURN change_radix(args[0], 16, 2)
+END FUNCTION
+
+FUNCTION builtin_x2c(args: Array<String>): String
+    RETURN convert_hex_string(args[0])
+END FUNCTION
+
+FUNCTION builtin_x2d(args: Array<String>): String
+    VAR hexstring := string.replaceAll(args[0], " ", "")
+    LET length := (IF args.size() >= 2 AND args[1] <> "" THEN rxnum(args[1]) ELSE 0)
+    VAR negative := FALSE
+    IF length > 0 THEN
+        IF length <= hexstring.length() THEN
+            hexstring := hexstring[LAST-(length-1) TO LAST]
+            ASSERT hexstring.length() = length
+            negative := hexstring[0] >= "8"
+        END IF
+    END IF
+    LET r := change_radix(hexstring, 16, 10)
+    RETURN (IF negative THEN str(-(2^(4*length)-num(r))) ELSE r)
+END FUNCTION
+
+FUNCTION builtin_xrange(args: Array<String>): String
+    LET start := (IF args.size() >= 1 AND args[0] <> "" THEN args[0] ELSE "\u0000")
+    LET end := (IF args.size() >= 2 AND args[1] <> "" THEN args[1] ELSE "\u00ff")
+    VAR r := ""
+    FOR c := string.toCodePoint(start) TO string.toCodePoint(end) DO
+        r.append(string.fromCodePoint(c))
+    END FOR
+    RETURN r
+END FUNCTION
+
+VAR BuiltinFunctions: Dictionary<FUNCTION(args: Array<String>): String> := {
+    "ABBREV": builtin_abbrev,
+    "ABS": builtin_abs,
+    "ADDRESS": builtin_address,
+    "ARG": builtin_arg,
+    "B2X": builtin_b2x,
+    "BITAND": builtin_bitand,
+    "BITOR": builtin_bitor,
+    "BITXOR": builtin_bitxor,
+    "C2D": builtin_c2d,
+    "C2X": builtin_c2x,
+    "CENTER": builtin_center,
+    "CENTRE": builtin_center,
+    "CHARIN": builtin_charin,
+    "CHAROUT": builtin_charout,
+    "CHANGESTR": builtin_changestr,
+    "COMPARE": builtin_compare,
+    "CONDITION": builtin_condition,
+    "COPIES": builtin_copies,
+    "COUNTSTR": builtin_countstr,
+    "D2C": builtin_d2c,
+    "D2X": builtin_d2x,
+    "DATATYPE": builtin_datatype,
+    "DATE": builtin_date,
+    "DELSTR": builtin_delstr,
+    "DELWORD": builtin_delword,
+    "DIGITS": builtin_digits,
+    "ERRORTEXT": builtin_errortext,
+    "FIND": builtin_find,
+    "FORM": builtin_form,
+    "FORMAT": builtin_format,
+    "FUZZ": builtin_fuzz,
+    "GETPID": builtin_getpid,
+    "INSERT": builtin_insert,
+    "LASTPOS": builtin_lastpos,
+    "LEFT": builtin_left,
+    "LENGTH": builtin_length,
+    "LINEIN": builtin_linein,
+    "LINEOUT": builtin_lineout,
+    "LINES": builtin_lines,
+    "LOWER": builtin_lower,
+    "MAX": builtin_max,
+    "MIN": builtin_min,
+    "OVERLAY": builtin_overlay,
+    "POS": builtin_pos,
+    "QUEUED": builtin_queued,
+    "RANDOM": builtin_random,
+    "REVERSE": builtin_reverse,
+    "RIGHT": builtin_right,
+    "SIGN": builtin_sign,
+    "SOURCELINE": builtin_sourceline,
+    "SPACE": builtin_space,
+    "STREAM": builtin_stream,
+    "STRIP": builtin_strip,
+    "SUBSTR": builtin_substr,
+    "SUBWORD": builtin_subword,
+    "SYMBOL": builtin_symbol,
+    "TIME": builtin_time,
+    "TRACE": builtin_trace,
+    "TRANSLATE": builtin_translate,
+    "TRUNC": builtin_trunc,
+    "UPPER": builtin_upper,
+    "VALUE": builtin_value,
+    "VERIFY": builtin_verify,
+    "WORD": builtin_word,
+    "WORDINDEX": builtin_wordindex,
+    "WORDLENGTH": builtin_wordlength,
+    "WORDPOS": builtin_wordpos,
+    "WORDS": builtin_words,
+    "X2B": builtin_x2b,
+    "X2C": builtin_x2c,
+    "X2D": builtin_x2d,
+    "XRANGE": builtin_xrange,
+}
+
+FUNCTION builtin_function(name: String, args: Array<String>): String
+    IF name IN BuiltinFunctions THEN
+        LET f: FUNCTION(args: Array<String>): String := BuiltinFunctions[name]
+        RETURN f(args)
+    END IF
+    ASSERT FALSE, "unknown builtin function", name
+    RETURN ""
+END FUNCTION
+
+FUNCTION get_function_arguments(tokens: Array<Token>, INOUT i: Number): Array<String>
+    VAR r: Array<String> := []
+    WHILE NOT (tokens[i].type = TokenType.Special AND tokens[i].value IN [")", ";"]) DO
+        LET s: String := evaluate(tokens, INOUT i, [])
+        r.append(s)
+        IF tokens[i].type = TokenType.Special AND tokens[i].value = "," THEN
+            INC i
+        END IF
+    END WHILE
+    RETURN r
+END FUNCTION
+
+FUNCTION evaluate_term(tokens: Array<Token>, INOUT i: Number): String
+    VAR r: String := ""
+    CASE tokens[i].type
+        WHEN TokenType.Var_symbol DO
+            LET name: String := tokens[i].value
+            INC i
+            IF tokens[i].type = TokenType.Special AND tokens[i].value = "(" AND tokens[i].abuttal THEN
+                INC i
+                LET args: Array<String> := get_function_arguments(tokens, INOUT i)
+                ASSERT tokens[i].type = TokenType.Special AND tokens[i].value = ")"
+                INC i
+                VAR lindex: Number
+                IF find_label(source_tokens, name, OUT lindex) THEN
+                    vars["SIGL"] := str(tokens[i].line)
+                    contexts.append(ContextEntry(type WITH ContextType.call, call_tokens WITH tokens, call_return_ip WITH i, call_args WITH args))
+                    r := interpret_function(source_tokens, lindex + 1)
+                ELSE
+                    r := builtin_function(name, args)
+                END IF
+            ELSE
+                r := get_var(name)
+            END IF
+        WHEN TokenType.Const_symbol, TokenType.String DO
+            r := tokens[i].value
+            INC i
+            IF tokens[i].type = TokenType.Special AND tokens[i].value = "(" AND tokens[i].abuttal THEN
+                INC i
+                LET args: Array<String> := get_function_arguments(tokens, INOUT i)
+                ASSERT tokens[i].type = TokenType.Special AND tokens[i].value = ")"
+                INC i
+                IF r IN BuiltinFunctions THEN
+                     r := builtin_function(r, args)
+                ELSE
+                    VAR stdout: Bytes
+                    _ := process.call(r & " " & string.join(args, " "), OUT stdout, OUT _)
+                    r := stdout.decodeToString()
+                    IF string.hasSuffix(r, "\n") THEN
+                        r := r[FIRST TO LAST-1]
+                    END IF
+                END IF
+            END IF
+        WHEN OTHERS DO
+            -- Must be empty argument, as in: call charout , 'a'
+    END CASE
+    RETURN r
+END FUNCTION
+
+CONSTANT OperatorPrecedence: Dictionary<Number> := {
+    "": -1,
+    ")": -1,
+    "(": 0,
+    "&&": 1,
+    "|": 2,
+    "&": 3,
+    "=": 4,
+    "\\=": 4,
+    "==": 4,
+    "\\==": 4,
+    "<": 4,
+    "<=": 4,
+    ">": 4,
+    ">=": 4,
+    "<>": 4,
+    " ": 5,
+    "||": 5,
+    "+": 6,
+    "-": 6,
+    "*": 7,
+    "/": 7,
+    "%": 7,
+    "//": 7,
+    "**": 8,
+    "negate": 9,
+    "\\": 9,
+}
+
+FUNCTION evaluate(tokens: Array<Token>, INOUT i: Number, terminating_tokens: Array<String>): String
+    --print("evaluate \(tokens[i].type) \(tokens[i].value)")
+    VAR operand_stack: Array<String> := []
+    VAR operator_stack: Array<String> := []
+    VAR paren_depth: Number := 0
+
+    FUNCTION pop_operand(): String
+        VAR r: String := operand_stack[LAST]
+        operand_stack.resize(operand_stack.size() - 1)
+        RETURN r
+    END FUNCTION
+
+    FUNCTION push_operand(x: String)
+        operand_stack.append(x)
+    END FUNCTION
+
+    FUNCTION pop_operator(): String
+        VAR r: String := operator_stack[LAST]
+        operator_stack.resize(operator_stack.size() - 1)
+        RETURN r
+    END FUNCTION
+
+    FUNCTION resolve_stack(next_op: String)
+        LET level: Number := OperatorPrecedence[next_op]
+        WHILE operator_stack.size() > 0 AND level <= OperatorPrecedence[operator_stack[LAST]] DO
+            LET op: String := pop_operator()
+            CASE op
+                WHEN " " DO
+                    LET y: String := pop_operand()
+                    LET x: String := pop_operand()
+                    push_operand(x & " " & y)
+                WHEN "&&" DO
+                    LET y: String := pop_operand()
+                    LET x: String := pop_operand()
+                    push_operand((IF (num(x) <> 0) <> (num(y) <> 0) THEN "1" ELSE "0"))
+                WHEN "|" DO
+                    LET y: String := pop_operand()
+                    LET x: String := pop_operand()
+                    push_operand((IF num(x) <> 0 OR num(y) <> 0 THEN "1" ELSE "0"))
+                WHEN "&" DO
+                    LET y: String := pop_operand()
+                    LET x: String := pop_operand()
+                    push_operand((IF num(x) <> 0 AND num(y) <> 0 THEN "1" ELSE "0"))
+                WHEN "||" DO
+                    LET y: String := pop_operand()
+                    LET x: String := pop_operand()
+                    push_operand(x & y)
+                WHEN "=" DO
+                    LET y: String := pop_operand()
+                    LET x: String := pop_operand()
+                    VAR a: Number
+                    VAR b: Number
+                    IF is_number(x, OUT a) AND is_number(y, OUT b) THEN
+                        push_operand((IF a = b THEN "1" ELSE "0"))
+                    ELSE
+                        push_operand((IF string.trim(x) = string.trim(y) THEN "1" ELSE "0"))
+                    END IF
+                WHEN "\\=", "<>" DO
+                    LET y: String := pop_operand()
+                    LET x: String := pop_operand()
+                    VAR a: Number
+                    VAR b: Number
+                    IF is_number(x, OUT a) AND is_number(y, OUT b) THEN
+                        push_operand((IF a <> b THEN "1" ELSE "0"))
+                    ELSE
+                        push_operand((IF string.trim(x) <> string.trim(y) THEN "1" ELSE "0"))
+                    END IF
+                WHEN "==" DO
+                    LET y: String := pop_operand()
+                    LET x: String := pop_operand()
+                    push_operand((IF x = y THEN "1" ELSE "0"))
+                WHEN "\\==" DO
+                    LET y: String := pop_operand()
+                    LET x: String := pop_operand()
+                    push_operand((IF x <> y THEN "1" ELSE "0"))
+                WHEN "<" DO
+                    LET y: String := pop_operand()
+                    LET x: String := pop_operand()
+                    VAR a: Number
+                    VAR b: Number
+                    IF is_number(x, OUT a) AND is_number(y, OUT b) THEN
+                        push_operand((IF a < b THEN "1" ELSE "0"))
+                    ELSE
+                        push_operand((IF x < y THEN "1" ELSE "0"))
+                    END IF
+                WHEN "<=" DO
+                    LET y: String := pop_operand()
+                    LET x: String := pop_operand()
+                    VAR a: Number
+                    VAR b: Number
+                    IF is_number(x, OUT a) AND is_number(y, OUT b) THEN
+                        push_operand((IF a <= b THEN "1" ELSE "0"))
+                    ELSE
+                        push_operand((IF x <= y THEN "1" ELSE "0"))
+                    END IF
+                WHEN ">" DO
+                    LET y: String := pop_operand()
+                    LET x: String := pop_operand()
+                    push_operand((IF rxnum(x) > rxnum(y) THEN "1" ELSE "0"))
+                WHEN ">=" DO
+                    LET y: String := pop_operand()
+                    LET x: String := pop_operand()
+                    VAR a: Number
+                    VAR b: Number
+                    IF is_number(x, OUT a) AND is_number(y, OUT b) THEN
+                        push_operand((IF a >= b THEN "1" ELSE "0"))
+                    ELSE
+                        push_operand((IF x >= y THEN "1" ELSE "0"))
+                    END IF
+                WHEN "+" DO
+                    LET y: String := pop_operand()
+                    LET x: String := pop_operand()
+                    push_operand(str(rxnum(x) + rxnum(y)))
+                WHEN "-" DO
+                    LET y: String := pop_operand()
+                    LET x: String := pop_operand()
+                    push_operand(str(rxnum(x) - rxnum(y)))
+                WHEN "*" DO
+                    LET y: String := pop_operand()
+                    LET x: String := pop_operand()
+                    push_operand(str(rxnum(x) * rxnum(y)))
+                WHEN "/" DO
+                    LET y: String := pop_operand()
+                    LET x: String := pop_operand()
+                    LET yy := rxnum(y)
+                    IF yy <> 0 THEN
+                        push_operand(str(rxnum(x) / yy))
+                    ELSE
+                        error(42.3)
+                    END IF
+                WHEN "%" DO
+                    LET y: String := pop_operand()
+                    LET x: String := pop_operand()
+                    LET yy := rxnum(y)
+                    IF yy <> 0 THEN
+                        push_operand(str(rxnum(x) INTDIV yy))
+                    ELSE
+                        error(42.3)
+                    END IF
+                WHEN "//" DO
+                    LET y: String := pop_operand()
+                    LET x: String := pop_operand()
+                    LET yy := rxnum(y)
+                    IF yy <> 0 THEN
+                        push_operand(str(rxnum(x) MOD yy))
+                    ELSE
+                        error(42.3)
+                    END IF
+                WHEN "**" DO
+                    LET y: String := pop_operand()
+                    LET x: String := pop_operand()
+                    push_operand(str(rxnum(x) ^ rxnum(y)))
+                WHEN "negate" DO
+                    LET x: String := pop_operand()
+                    push_operand(str(-rxnum(x)))
+                WHEN "\\" DO
+                    LET x: String := pop_operand()
+                    CASE x
+                        WHEN "0" DO
+                            push_operand("1")
+                        WHEN "1" DO
+                            push_operand("0")
+                        WHEN OTHERS DO
+                            error(34.6, {"operator": "\\", "value": x})
+                    END CASE
+                WHEN "(" DO
+                    -- no operation
+                WHEN OTHERS DO
+                    ASSERT FALSE, "unimplemented operator", op
+            END CASE
+        END WHILE
+    END FUNCTION
+
+    VAR last_was_term: Boolean := FALSE
+    LOOP
+        --print("  eval \(tokens[i])")
+        --print("    last_was_term \(last_was_term)")
+        VAR this_is_term: Boolean := FALSE
+        -- First check for binary operators.
+        IF tokens[i].type = TokenType.Operator AND
+           NOT (tokens[i].value = "\\") AND
+           NOT (tokens[i].value IN ["+","-"] AND NOT last_was_term) THEN
+            resolve_stack(tokens[i].value)
+            operator_stack.append(tokens[i].value)
+            INC i
+        -- Check for closing parenthesis.
+        ELSIF tokens[i].type = TokenType.Special AND tokens[i].value = ")" AND paren_depth > 0 THEN
+            DEC paren_depth
+            resolve_stack(")")
+            this_is_term := TRUE
+            INC i
+        -- Check for end of expression.
+        ELSIF (tokens[i].type = TokenType.Special AND tokens[i].value <> "(") OR
+              (paren_depth = 0 AND tokens[i].type = TokenType.Var_symbol AND tokens[i].value IN terminating_tokens) THEN
+            ASSERT paren_depth = 0
+            resolve_stack("") -- end of expression
+            EXIT LOOP
+        ELSE
+            IF last_was_term THEN
+                -- Must be another term, add concatenation operator.
+                IF tokens[i].abuttal THEN
+                    resolve_stack("||")
+                    operator_stack.append("||")
+                ELSE
+                    resolve_stack(" ")
+                    operator_stack.append(" ")
+                END IF
+            END IF
+            IF tokens[i].type = TokenType.Special AND tokens[i].value = "(" THEN
+                INC paren_depth
+                operator_stack.append("(")
+                INC i
+            ELSIF tokens[i].type = TokenType.Operator THEN
+                IF tokens[i].value = "\\" THEN
+                    operator_stack.append(tokens[i].value)
+                ELSIF tokens[i].value = "-" AND NOT last_was_term THEN
+                    operator_stack.append("negate")
+                ELSIF tokens[i].value = "+" AND NOT last_was_term THEN
+                    -- Unary + is no operation.
+                ELSE
+                    ASSERT FALSE, "binary operator should have been handled above"
+                END IF
+                INC i
+            ELSE
+                LET term: String := evaluate_term(tokens, INOUT i)
+                operand_stack.append(term)
+                this_is_term := TRUE
+            END IF
+        END IF
+        --print("    operators \(operator_stack)")
+        --print("    operands \(operand_stack)")
+        last_was_term := this_is_term
+    END LOOP
+    IF operand_stack.size() = 0 THEN
+        RETURN ""
+    END IF
+    RETURN operand_stack[FIRST]
+END FUNCTION
+
+FUNCTION skip_if_ncl(tokens: Array<Token>, INOUT i: Number)
+    WHILE i < tokens.size() AND tokens[i].type = TokenType.Special AND tokens[i].value = ";" DO
+        INC i
+    END WHILE
+END FUNCTION
+
+TYPE TemplateType IS ENUM
+    placeholder
+    target
+    pattern
+    positional
+END ENUM
+
+TYPE Template IS RECORD
+    type: TemplateType
+    target: String
+    pattern: String
+    position: Number
+    position_relative: Boolean
+END RECORD
+
+FUNCTION Template.toString(self: Template): String
+    CASE self.type
+        WHEN TemplateType.placeholder DO
+            RETURN "<\(self.type)>"
+        WHEN TemplateType.target DO
+            RETURN "<\(self.type):\(self.target)>"
+        WHEN TemplateType.pattern DO
+            RETURN "<\(self.type):\(self.pattern)>"
+        WHEN TemplateType.positional DO
+            RETURN "<\(self.type):\(self.position),\(self.position_relative)>"
+    END CASE
+END FUNCTION
+
+FUNCTION do_parse(tokens: Array<Token>, INOUT i: Number, upper: Boolean)
+    ASSERT tokens[i].type = TokenType.Var_symbol
+    LET source: String := tokens[i].value
+    INC i
+    VAR input: Array<String> := []
+    CASE source
+        WHEN "ARG" DO
+            input := contexts[LAST].call_args
+        WHEN "PULL" DO
+            IF queue.size() > 0 THEN
+                input := [queue[FIRST]]
+                queue[FIRST TO FIRST] := []
+            ELSE
+                input := [console.input("")]
+            END IF
+        WHEN "SOURCE" DO
+            input := ["UNIX COMMAND \(script_filename)"]
+        WHEN "VALUE" DO
+            input := [evaluate(tokens, INOUT i, ["WITH"])]
+            IF NOT (tokens[i].type = TokenType.Var_symbol AND tokens[i].value = "WITH") THEN
+                ASSERT FALSE, "WITH expected"
+            END IF
+            INC i
+        WHEN "VAR" DO
+            IF tokens[i].type = TokenType.Var_symbol THEN
+                input := [get_var(tokens[i].value)]
+                INC i
+            ELSE
+                ASSERT FALSE, "var not found"
+            END IF
+        WHEN "VERSION" DO
+            input := ["neon 5 2020 Sep 22"]
+        WHEN OTHERS DO
+            ASSERT FALSE, "unknown parse source", source
+    END CASE
+    VAR template_list: Array<Array<Template>> := []
+    WHILE NOT (tokens[i].type = TokenType.Special AND tokens[i].value = ";") DO
+        VAR template: Array<Template> := []
+        WHILE NOT (tokens[i].type = TokenType.Special AND tokens[i].value = ";") DO
+            IF tokens[i].type = TokenType.Var_symbol THEN
+                template.append(Template(type WITH TemplateType.target, target WITH tokens[i].value))
+                INC i
+            ELSIF tokens[i].type = TokenType.String THEN
+                template.append(Template(type WITH TemplateType.pattern, pattern WITH tokens[i].value))
+                INC i
+            ELSIF tokens[i].type = TokenType.Special AND tokens[i].value = "(" THEN
+                INC i
+                LET sep: String := evaluate(tokens, INOUT i, [])
+                ASSERT tokens[i].value = ")"
+                INC i
+                template.append(Template(type WITH TemplateType.pattern, pattern WITH sep))
+            ELSIF tokens[i].type = TokenType.Const_symbol THEN
+                IF tokens[i].value = "." THEN
+                    template.append(Template(type WITH TemplateType.placeholder))
+                ELSE
+                    LET pos: Number := num(tokens[i].value)
+                    template.append(Template(type WITH TemplateType.positional, position WITH pos, position_relative WITH pos < 0))
+                END IF
+                INC i
+            ELSIF tokens[i].type = TokenType.Operator AND tokens[i].value = "+" THEN
+                INC i
+                ASSERT tokens[i].type = TokenType.Const_symbol
+                template.append(Template(type WITH TemplateType.positional, position WITH num(tokens[i].value), position_relative WITH TRUE))
+                INC i
+            ELSIF tokens[i].type = TokenType.Special AND tokens[i].value = "," THEN
+                INC i
+                EXIT WHILE
+            ELSE
+                ASSERT FALSE, "unexpected template token", tokens[i]
+            END IF
+        END WHILE
+        --FOREACH t IN template DO print("\(t)") END FOREACH
+        template_list.append(template)
+    END WHILE
+    FOREACH s IN input INDEX tli DO
+        IF tli >= template_list.size() THEN
+            EXIT FOREACH
+        END IF
+        LET ss: String := (IF upper THEN string.upper(s) ELSE s)
+        LET template: Array<Template> := template_list[tli]
+        VAR si: Number := 0
+        VAR ti: Number := 0
+        WHILE si < s.length() AND ti < template.size() DO
+            LET t: Template := template[ti]
+            --print("si=\(si) ti=\(ti) t=\(t)")
+            WHILE si < s.length() AND s[si] = " " DO
+                INC si
+            END WHILE
+            IF ti >= template.size()-1 THEN
+                IF t.type = TemplateType.target THEN
+                    set_var(t.target, (IF si < s.length() THEN s[si TO LAST] ELSE ""))
+                END IF
+                INC ti
+                EXIT WHILE
+            END IF
+            CASE t.type
+                WHEN TemplateType.placeholder, TemplateType.target DO
+                    VAR next: Number := si
+                    CASE template[ti+1].type
+                        WHEN TemplateType.placeholder, TemplateType.target DO
+                            WHILE next < s.length() AND s[next] <> " " DO
+                                INC next
+                            END WHILE
+                        WHEN TemplateType.pattern DO
+                            LET j: Number := string.find(s[next TO LAST], template[ti+1].pattern)
+                            IF j >= 0 THEN
+                                next := next + j
+                            ELSE
+                                next := s.length()
+                            END IF
+                        WHEN TemplateType.positional DO
+                            IF template[ti+1].position_relative THEN
+                                next := next + template[ti+1].position
+                            ELSE
+                                next := template[ti+1].position - 1
+                            END IF
+                            INC ti
+                    END CASE
+                    IF t.type = TemplateType.target THEN
+                        IF next > si THEN
+                            set_var(t.target, s[si TO next-1])
+                        ELSE
+                            set_var(t.target, s[si TO LAST])
+                        END IF
+                    END IF
+                    si := next
+                WHEN TemplateType.pattern DO
+                    WHILE si < s.length() DO
+                        IF s[si TO si+t.pattern.length()-1] = t.pattern THEN
+                            si := si + t.pattern.length()
+                            EXIT WHILE
+                        END IF
+                        INC si
+                    END WHILE
+                    ASSERT si < s.length(), s, t
+                WHEN TemplateType.positional DO
+                    IF t.position_relative THEN
+                        si := si + t.position
+                    ELSE
+                        si := t.position - 1
+                    END IF
+            END CASE
+            INC ti
+        END WHILE
+        WHILE ti < template.size() DO
+            IF template[ti].type = TemplateType.target THEN
+                set_var(template[ti].target, "")
+            END IF
+            INC ti
+        END WHILE
+    END FOREACH
+END FUNCTION
+
+FUNCTION send_command(environment: String, command: String): String
+    CASE environment
+        WHEN "COMMAND" DO
+            IF string.hasPrefix(command, "rexx ") THEN
+                RETURN str(os.system("bin/neon samples/rexx/rexx.neon \(command[5 TO LAST])"))
+            ELSE
+                ASSERT FALSE, "unknown command", command
+            END IF
+        WHEN "PATH", "SYSTEM" DO
+            RETURN str(os.system(command))
+    END CASE
+    ASSERT FALSE, "unknown environment", environment
+    RETURN ""
+END FUNCTION
+
+FUNCTION skip_instruction(tokens: Array<Token>, INOUT i: Number): Boolean
+    CHECK i < tokens.size() ELSE
+        RETURN FALSE
+    END CHECK
+    IF tokens[i].type = TokenType.Var_symbol THEN
+        IF tokens[i+1].type = TokenType.Operator AND tokens[i+1].value = "=" THEN
+            INC i
+            WHILE NOT (tokens[i].type = TokenType.Special AND tokens[i].value = ";") DO
+                INC i
+            END WHILE
+        ELSE
+            CASE tokens[i].value
+                WHEN "DO" DO
+                    INC i
+                    VAR do_var: String := ""
+                    IF tokens[i].type = TokenType.Var_symbol AND tokens[i+1].type = TokenType.Operator AND tokens[i+1].value = "=" THEN
+                        do_var := tokens[i].value
+                    END IF
+                    WHILE NOT (tokens[i].type = TokenType.Var_symbol AND tokens[i].value = "END") DO
+                        IF NOT skip_instruction(tokens, INOUT i) THEN
+                            RETURN FALSE
+                        END IF
+                    END WHILE
+                    INC i
+                    IF do_var <> "" AND tokens[i].type = TokenType.Var_symbol THEN
+                        IF tokens[i].value = do_var THEN
+                            INC i
+                        ELSE
+                            ASSERT FALSE, "mismatch loop var", tokens[i]
+                        END IF
+                    END IF
+                WHEN "IF" DO
+                    WHILE NOT (tokens[i].type = TokenType.Var_symbol AND tokens[i].value = "THEN") DO
+                        INC i
+                    END WHILE
+                    INC i
+                    skip_if_ncl(tokens, INOUT i)
+                    IF NOT skip_instruction(tokens, INOUT i) THEN
+                        RETURN FALSE
+                    END IF
+                    IF tokens[i].type = TokenType.Var_symbol AND tokens[i].value = "ELSE" THEN
+                        INC i
+                        skip_if_ncl(tokens, INOUT i)
+                        IF NOT skip_instruction(tokens, INOUT i) THEN
+                            RETURN FALSE
+                        END IF
+                    END IF
+                WHEN "SELECT" DO
+                    INC i
+                    WHILE NOT (tokens[i].type = TokenType.Var_symbol AND tokens[i].value = "END") DO
+                        IF tokens[i].type = TokenType.Var_symbol AND tokens[i].value = "WHEN" THEN
+                            WHILE NOT (tokens[i].type = TokenType.Var_symbol AND tokens[i].value = "THEN") DO
+                                INC i
+                            END WHILE
+                            INC i
+                        ELSE
+                            IF NOT skip_instruction(tokens, INOUT i) THEN
+                                RETURN FALSE
+                            END IF
+                        END IF
+                    END WHILE
+                    INC i
+                WHEN OTHERS DO
+                    WHILE NOT (tokens[i].type = TokenType.Special AND tokens[i].value = ";") DO
+                        INC i
+                    END WHILE
+            END CASE
+        END IF
+    ELSE
+        WHILE NOT (tokens[i].type = TokenType.Special AND tokens[i].value = ";") DO
+            INC i
+        END WHILE
+    END IF
+    skip_if_ncl(tokens, INOUT i)
+    RETURN TRUE
+END FUNCTION
+
+FUNCTION do_check_terminate(tokens: Array<Token>, INOUT i: Number, context: ContextEntry): Boolean
+    LET var: String := context.do_var
+    IF var <> "" THEN
+        LET value := num(get_var(var))
+        IF context.do_bounded AND value > context.do_bounded_to THEN
+            RETURN TRUE
+        END IF
+    END IF
+    LET while: Number := context.do_while_condition
+    IF while > 0 THEN
+        i := context.do_while_condition
+        LET cond: String := evaluate(tokens, INOUT i, [])
+        IF cond = "0" THEN
+            RETURN TRUE
+        ELSIF cond <> "1" THEN
+            ASSERT FALSE, "unexpected cond", cond
+        END IF
+    END IF
+    RETURN FALSE
+END FUNCTION
+
+FUNCTION do_iterate(context: ContextEntry)
+    LET var: String := context.do_var
+    IF var <> "" THEN
+        LET newvalue: Number := num(get_var(var)) + context.do_by
+        set_var(var, str(newvalue))
+    END IF
+END FUNCTION
+
+FUNCTION interpret_step(INOUT tokens: Array<Token>, INOUT i: Number): Boolean
+    --VAR o: Object := vars print(o.toString())
+    --print("interpret \(contexts.size()) \(tokens[i])")
+    IF trace THEN
+        print("\(tokens[i].line:6) *-* \(string.trim(sourcelines[tokens[i].line]))")
+    END IF
+    LET orig_i: Number := i
+    CASE tokens[i].type
+        WHEN TokenType.Label DO
+            INC i
+        WHEN TokenType.Special DO
+            CASE tokens[i].value
+                WHEN ";" DO
+                    INC i
+                WHEN OTHERS DO
+                    ASSERT FALSE, "unexpected special token", tokens[i]
+            END CASE
+        WHEN TokenType.Var_symbol DO
+            IF tokens[i+1].type = TokenType.Operator AND tokens[i+1].value = "=" THEN
+                LET var: String := tokens[i].value
+                i := i + 2
+                LET s: String := evaluate(tokens, INOUT i, [])
+                set_var(var, s)
+                RETURN TRUE
+            END IF
+            IF tokens[i+1].type = TokenType.Operator AND tokens[i+1].value = "==" THEN
+                error(35.1, {"token": tokens[i+1].value})
+            END IF
+            CASE tokens[i].value
+                WHEN "ADDRESS" DO
+                    INC i
+                    IF tokens[i].type = TokenType.Var_symbol THEN
+                        IF tokens[i].value = "VALUE" THEN
+                            INC i
+                            last_environment := current_environment
+                            current_environment := evaluate(tokens, INOUT i, ["WITH"])
+                        ELSE
+                            LET environment := tokens[i].value
+                            INC i
+                            IF NOT (tokens[i].type = TokenType.Special AND tokens[i].value = ";") THEN
+                                LET command := evaluate(tokens, INOUT i, ["WITH"])
+                                vars["RC"] := send_command(environment, command)
+                            ELSE
+                                last_environment := current_environment
+                                current_environment := environment
+                            END IF
+                        END IF
+                    ELSIF tokens[i].type = TokenType.Special AND tokens[i].value = ";" THEN
+                        IF last_environment <> "" THEN
+                            LET cur := current_environment
+                            current_environment := last_environment
+                            last_environment := cur
+                        END IF
+                    ELSE
+                        last_environment := current_environment
+                        current_environment := evaluate(tokens, INOUT i, [])
+                    END IF
+                WHEN "ARG" DO
+                    do_parse(tokens, INOUT i, upper WITH TRUE)
+                WHEN "CALL" DO
+                    INC i
+                    IF tokens[i].type = TokenType.Var_symbol AND tokens[i].value = "ON" THEN
+                        INC i
+                        IF tokens[i].type = TokenType.Var_symbol AND tokens[i].value IN Signals THEN
+                            LET signal: String := tokens[i].value
+                            VAR label: String := signal
+                            INC i
+                            IF tokens[i].type = TokenType.Var_symbol AND tokens[i].value = "NAME" THEN
+                                INC i
+                                IF tokens[i].type = TokenType.Var_symbol THEN
+                                    label := tokens[i].value
+                                    INC i
+                                ELSE
+                                    ASSERT FALSE, "label expected", tokens[i]
+                                END IF
+                            END IF
+                            signal_handlers[signal] := SignalHandler(label WITH label, instruction WITH "CALL")
+                        ELSE
+                            ASSERT FALSE, "unknown signal type", tokens[i]
+                        END IF
+                    ELSIF tokens[i].type = TokenType.Var_symbol AND tokens[i].value = "OFF" THEN
+                        INC i
+                        IF tokens[i].type = TokenType.Var_symbol AND tokens[i].value IN Signals THEN
+                            LET signal := tokens[i].value
+                            INC i
+                            signal_handlers.remove(signal)
+                        ELSE
+                            ASSERT FALSE, "unknown signal type", tokens[i]
+                        END IF
+                    ELSIF tokens[i].type IN [TokenType.Const_symbol, TokenType.Var_symbol] THEN
+                        LET name: String := tokens[i].value
+                        INC i
+                        LET args: Array<String> := get_function_arguments(tokens, INOUT i)
+                        VAR lindex: Number
+                        IF find_label(source_tokens, name, OUT lindex) THEN
+                            vars["SIGL"] := str(tokens[i].line)
+                            contexts.append(ContextEntry(type WITH ContextType.call, call_tokens WITH tokens, call_return_ip WITH i, call_args WITH args))
+                            tokens := source_tokens
+                            i := lindex + 1
+                        ELSE
+                            vars["RESULT"] := builtin_function(name, args)
+                        END IF
+                    ELSE
+                        ASSERT FALSE, "unexpected thing to call", tokens[i]
+                    END IF
+                WHEN "DO" DO
+                    VAR out_of_loop: Number := i
+                    IF NOT skip_instruction(tokens, INOUT out_of_loop) THEN
+                        error(999)
+                    END IF
+                    INC i
+                    IF tokens[i].type = TokenType.Special AND tokens[i].value = ";" THEN
+                        contexts.append(ContextEntry(type WITH ContextType.do_single, do_skip WITH out_of_loop))
+                    ELSE
+                        VAR context: ContextEntry := ContextEntry(type WITH ContextType.do_repetitive, do_skip WITH out_of_loop, do_by WITH 1)
+                        context.call_args := contexts[LAST].call_args -- TODO handle this better
+                        IF tokens[i].type = TokenType.Var_symbol AND tokens[i+1].type = TokenType.Operator AND tokens[i+1].value = "=" THEN
+                            context.do_var := tokens[i].value
+                            i := i + 2
+                            set_var(context.do_var, evaluate(tokens, INOUT i, ["TO", "BY", "FOR", "WHILE", "UNTIL"]))
+                            LOOP
+                                IF tokens[i].type = TokenType.Var_symbol AND tokens[i].value = "TO" THEN
+                                    INC i
+                                    context.do_bounded := TRUE
+                                    context.do_bounded_to := num(evaluate(tokens, INOUT i, ["TO", "BY", "FOR", "WHILE", "UNTIL"]))
+                                ELSIF tokens[i].type = TokenType.Var_symbol AND tokens[i].value = "BY" THEN
+                                    INC i
+                                    context.do_by := num(evaluate(tokens, INOUT i, ["TO", "BY", "FOR", "WHILE", "UNTIL"]))
+                                ELSIF tokens[i].type = TokenType.Var_symbol AND tokens[i].value = "FOR" THEN
+                                    INC i
+                                    context.do_for := num(evaluate(tokens, INOUT i, ["TO", "BY", "FOR", "WHILE", "UNTIL"]))
+                                ELSE
+                                    EXIT LOOP
+                                END IF
+                            END LOOP
+                        ELSIF NOT (tokens[i].type = TokenType.Special AND tokens[i].value = ";") THEN
+                            IF NOT (tokens[i].type = TokenType.Var_symbol AND tokens[i].value IN ["WHILE", "UNTIL"]) THEN
+                                LET rep := num(evaluate(tokens, INOUT i, ["WHILE", "UNTIL"]))
+                                context.do_var := ".INDEX.\(i)"
+                                set_var(context.do_var, "1")
+                                context.do_bounded := TRUE
+                                context.do_bounded_to := rep
+                                IF rep <= 0 THEN
+                                    i := out_of_loop
+                                END IF
+                            END IF
+                        END IF
+                        IF i < tokens.size() AND tokens[i].type = TokenType.Var_symbol AND tokens[i].value = "WHILE" THEN
+                            INC i
+                            context.do_while_condition := i
+                            WHILE NOT (tokens[i].type = TokenType.Special AND tokens[i].value = ";") DO
+                                INC i
+                            END WHILE
+                        END IF
+                        IF do_check_terminate(tokens, INOUT i, context) THEN
+                            i := out_of_loop
+                        END IF
+                        IF i < out_of_loop THEN
+                            context.do_top := i
+                            contexts.append(context)
+                        END IF
+                    END IF
+                WHEN "DROP" DO
+                    INC i
+                    LOOP
+                        IF tokens[i].type = TokenType.Var_symbol THEN
+                            vars.remove(tokens[i].value)
+                            INC i
+                        ELSIF tokens[i].type = TokenType.Special AND tokens[i].value = "(" THEN
+                            LET names := evaluate(tokens, INOUT i, [])
+                            FOREACH name IN string.split(names, " ") DO
+                                vars.remove(name)
+                            END FOREACH
+                        ELSIF tokens[i].type = TokenType.Special AND tokens[i].value = ";" THEN
+                            EXIT LOOP
+                        ELSE
+                            ASSERT FALSE, "unexpected thing to drop"
+                        END IF
+                    END LOOP
+                WHEN "ELSE" DO
+                    CASE contexts[LAST].type
+                        WHEN ContextType.if DO
+                            i := contexts[LAST].if_skip
+                            contexts.resize(contexts.size() - 1)
+                        WHEN OTHERS DO
+                            error(8.2)
+                    END CASE
+                WHEN "END" DO
+                    --print("END context \(contexts[LAST].type)")
+                    CASE contexts[LAST].type
+                        WHEN ContextType.do_single DO
+                            INC i
+                            contexts.resize(contexts.size() - 1)
+                        WHEN ContextType.do_repetitive DO
+                            do_iterate(contexts[LAST])
+                            IF do_check_terminate(tokens, INOUT i, contexts[LAST]) THEN
+                                i := contexts[LAST].do_skip
+                                contexts.resize(contexts.size() - 1)
+                            ELSE
+                                i := contexts[LAST].do_top
+                            END IF
+                        WHEN ContextType.select DO
+                            INC i
+                            contexts.resize(contexts.size() - 1)
+                        WHEN OTHERS DO
+                            error(10.1)
+                    END CASE
+                WHEN "EXIT" DO
+                    INC i
+                    VAR r: String := "0"
+                    IF NOT (tokens[i].type = TokenType.Special AND tokens[i].value = ";") THEN
+                        r := evaluate(tokens, INOUT i, [])
+                    END IF
+                    sys.exit(rxnum(r))
+                WHEN "IF" DO
+                    INC i
+                    LET cond: String := evaluate(tokens, INOUT i, ["THEN"])
+                    ASSERT tokens[i].type = TokenType.Var_symbol AND tokens[i].value = "THEN"
+                    INC i
+                    skip_if_ncl(tokens, INOUT i)
+                    CASE cond
+                        WHEN "1" DO
+                            VAR else: Number := i
+                            IF NOT skip_instruction(tokens, INOUT else) THEN
+                                error(14.3)
+                            END IF
+                            IF else < tokens.size() AND tokens[else].type = TokenType.Var_symbol AND tokens[else].value = "ELSE" THEN
+                                INC else
+                                skip_if_ncl(tokens, INOUT else)
+                                VAR skip: Number := else
+                                IF NOT skip_instruction(tokens, INOUT skip) THEN
+                                    error(999)
+                                END IF
+                                contexts.append(ContextEntry(type WITH ContextType.if, if_skip WITH skip, call_args WITH contexts[LAST].call_args))
+                            END IF
+                        WHEN "0" DO
+                            IF NOT skip_instruction(tokens, INOUT i) THEN
+                                error(14.3)
+                            END IF
+                            IF i < tokens.size() AND tokens[i].type = TokenType.Var_symbol AND tokens[i].value = "ELSE" THEN
+                                INC i
+                            END IF
+                        WHEN OTHERS DO
+                            ASSERT FALSE, "unexpected cond", cond
+                    END CASE
+                WHEN "INTERPRET" DO
+                    INC i
+                    LET expr: String := evaluate(tokens, INOUT i, [])
+                    LET itokens: Array<Token> := tokenise(expr) & [Token(type WITH TokenType.Special, value WITH ";"), Token(type WITH TokenType.Eos)]
+                    contexts.append(ContextEntry(type WITH ContextType.call, call_tokens WITH tokens, call_return_ip WITH i))
+                    tokens := itokens
+                    i := 0
+                WHEN "ITERATE" DO
+                    WHILE contexts.size() > 0 AND contexts[LAST].type <> ContextType.do_repetitive DO
+                        --IF contexts[LAST].type = ContextType.call THEN
+                        --    error(28.2)
+                        --END IF
+                        contexts.resize(contexts.size() - 1)
+                    END WHILE
+                    do_iterate(contexts[LAST])
+                    IF do_check_terminate(tokens, INOUT i, contexts[LAST]) THEN
+                        i := contexts[LAST].do_skip
+                        contexts.resize(contexts.size() - 1)
+                    ELSE
+                        i := contexts[LAST].do_top
+                    END IF
+                WHEN "LEAVE" DO
+                    WHILE contexts.size() > 0 AND contexts[LAST].type <> ContextType.do_repetitive DO
+                        contexts.resize(contexts.size() - 1)
+                    END WHILE
+                    i := contexts[LAST].do_skip
+                    contexts.resize(contexts.size() - 1)
+                WHEN "NOP" DO
+                    INC i
+                    -- No operation.
+                WHEN "NUMERIC" DO
+                    INC i
+                    CASE tokens[i].value
+                        WHEN "DIGITS" DO
+                            INC i
+                            IF NOT (tokens[i].type = TokenType.Special AND tokens[i].value = ";") THEN
+                                LET digits := evaluate(tokens, INOUT i, [])
+                                numeric_digits := num(digits)
+                            END IF
+                        WHEN "FORM" DO
+                            INC i
+                            VAR form := tokens[i].value
+                            IF form = "VALUE" THEN
+                                INC i
+                                form := evaluate(tokens, INOUT i, [])
+                            END IF
+                            CASE form
+                                WHEN "ENGINEERING" DO
+                                    numeric_form := NumericForm.engineering
+                                WHEN "SCIENTIFIC" DO
+                                    numeric_form := NumericForm.scientific
+                                WHEN OTHERS DO
+                                    error(25.11, {"keywords": "ENGINEERING SCIENTIFIC VALUE", "token": form})
+                            END CASE
+                            INC i
+                        WHEN "FUZZ" DO
+                            INC i
+                            IF NOT (tokens[i].type = TokenType.Special AND tokens[i].value = ";") THEN
+                                LET fuzz := evaluate(tokens, INOUT i, [])
+                                numeric_fuzz := num(fuzz)
+                            END IF
+                        WHEN OTHERS DO
+                            error(25.15, {"keywords": "DIGITS FORM FUZZ", "token": tokens[i].value})
+                    END CASE
+                WHEN "OPTIONS" DO
+                    INC i
+                    WHILE NOT (tokens[i].type = TokenType.Special AND tokens[i].value = ";") DO
+                        INC i
+                    END WHILE
+                WHEN "OTHERWISE" DO
+                    CASE contexts[LAST].type
+                        WHEN ContextType.select DO
+                            i := contexts[LAST].select_skip
+                            contexts.resize(contexts.size() - 1)
+                        WHEN OTHERS DO
+                            error(9.0)
+                    END CASE
+                WHEN "PARSE" DO
+                    INC i
+                    LET upper: Boolean := tokens[i].type = TokenType.Var_symbol AND tokens[i].value = "UPPER"
+                    IF upper THEN
+                        INC i
+                    END IF
+                    do_parse(tokens, INOUT i, upper)
+                WHEN "PROCEDURE" DO
+                    IF i = 0 OR tokens[i-1].type <> TokenType.Label THEN
+                        error(17.0)
+                    END IF
+                    INC i
+                    VAR exposed: Array<String> := []
+                    IF tokens[i].type = TokenType.Var_symbol AND tokens[i].value = "EXPOSE" THEN
+                        INC i
+                        WHILE tokens[i].type = TokenType.Var_symbol DO
+                            exposed.append(tokens[i].value)
+                            INC i
+                        END WHILE
+                    END IF
+                    contexts[LAST].call_is_procedure := TRUE
+                    contexts[LAST].call_vars := vars
+                    contexts[LAST].call_arrays := arrays
+                    -- TODO: save exposed vars so they can be put back to caller later
+                    vars := {}
+                    arrays := {}
+                    FOREACH var IN exposed DO
+                        IF string.hasSuffix(var, ".") THEN
+                            arrays[var] := contexts[LAST].call_arrays[var]
+                        ELSE
+                            vars[var] := contexts[LAST].call_vars[var]
+                        END IF
+                    END FOREACH
+                    -- TODO: expose arrays
+                WHEN "PULL" DO
+                    do_parse(tokens, INOUT i, upper WITH TRUE)
+                WHEN "PUSH" DO
+                    INC i
+                    LET expr := evaluate(tokens, INOUT i, [])
+                    queue := [expr] & queue
+                WHEN "QUEUE" DO
+                    INC i
+                    LET expr := evaluate(tokens, INOUT i, [])
+                    queue.append(expr)
+                WHEN "RETURN" DO
+                    INC i
+                    WHILE contexts.size() > 0 AND contexts[LAST].type <> ContextType.call DO
+                        contexts.resize(contexts.size() - 1)
+                    END WHILE
+                    ASSERT contexts.size() > 0, "unexpected return"
+                    -- TODO: expression is optional
+                    LET r: String := evaluate(tokens, INOUT i, [])
+                    tokens := contexts[LAST].call_tokens
+                    i := contexts[LAST].call_return_ip
+                    IF contexts[LAST].call_is_procedure THEN
+                        vars := contexts[LAST].call_vars
+                        arrays := contexts[LAST].call_arrays
+                    END IF
+                    vars["RESULT"] := r
+                    contexts.resize(contexts.size() - 1)
+                WHEN "SAY" DO
+                    INC i
+                    IF NOT (tokens[i].type = TokenType.Special AND tokens[i].value = ";") THEN
+                        LET s: String := evaluate(tokens, INOUT i, [])
+                        print(s)
+                    ELSE
+                        INC i
+                        print("")
+                    END IF
+                WHEN "SELECT" DO
+                    VAR end_of_select: Number := i
+                    IF NOT skip_instruction(tokens, INOUT end_of_select) THEN
+                        error(999)
+                    END IF
+                    INC i
+                    skip_if_ncl(tokens, INOUT i)
+                    VAR found: Boolean := FALSE
+                    WHILE tokens[i].type = TokenType.Var_symbol AND tokens[i].value = "WHEN" DO
+                        INC i
+                        LET cond: String := evaluate(tokens, INOUT i, ["THEN"])
+                        ASSERT tokens[i].type = TokenType.Var_symbol AND tokens[i].value = "THEN"
+                        INC i
+                        skip_if_ncl(tokens, INOUT i)
+                        IF cond = "1" THEN
+                            contexts.append(ContextEntry(type WITH ContextType.select, select_skip WITH end_of_select))
+                            found := TRUE
+                            EXIT WHILE
+                        ELSIF cond = "0" THEN
+                            IF NOT skip_instruction(tokens, INOUT i) THEN
+                                error(999)
+                            END IF
+                        ELSE
+                            ASSERT FALSE, "unexpected cond", cond
+                        END IF
+                    END WHILE
+                    IF NOT found AND tokens[i].type = TokenType.Var_symbol AND tokens[i].value = "OTHERWISE" THEN
+                        INC i
+                        contexts.append(ContextEntry(type WITH ContextType.select, select_skip WITH end_of_select))
+                    END IF
+                WHEN "SIGNAL" DO
+                    INC i
+                    IF tokens[i].type = TokenType.Var_symbol AND tokens[i].value = "ON" THEN
+                        INC i
+                        IF tokens[i].type = TokenType.Var_symbol AND tokens[i].value IN Signals THEN
+                            LET signal: String := tokens[i].value
+                            VAR label: String := signal
+                            INC i
+                            IF tokens[i].type = TokenType.Var_symbol AND tokens[i].value = "NAME" THEN
+                                INC i
+                                IF tokens[i].type = TokenType.Var_symbol THEN
+                                    label := tokens[i].value
+                                    INC i
+                                ELSE
+                                    ASSERT FALSE, "label expected", tokens[i]
+                                END IF
+                            END IF
+                            signal_handlers[signal] := SignalHandler(label WITH label, instruction WITH "SIGNAL")
+                        ELSE
+                            ASSERT FALSE, "unknown signal type", tokens[i]
+                        END IF
+                    ELSIF tokens[i].type = TokenType.Var_symbol AND tokens[i].value = "OFF" THEN
+                        INC i
+                        IF tokens[i].type = TokenType.Var_symbol AND tokens[i].value IN Signals THEN
+                            LET signal := tokens[i].value
+                            INC i
+                            signal_handlers.remove(signal)
+                        ELSE
+                            ASSERT FALSE, "unknown signal type", tokens[i]
+                        END IF
+                    ELSE
+                        LET name: String := tokens[i].value
+                        INC i
+                        VAR lindex: Number
+                        IF find_label(source_tokens, name, OUT lindex) THEN
+                            vars["SIGL"] := str(tokens[i].line)
+                            tokens := source_tokens
+                            i := lindex + 1
+                        ELSE
+                            error(16.1, {"name": name})
+                        END IF
+                    END IF
+                WHEN "THEN" DO
+                    error(8.1)
+                WHEN "TRACE" DO
+                    INC i
+                    VAR setting: String := tokens[i].value
+                    INC i
+                    CASE setting
+                        WHEN "OFF" DO
+                            -- No action
+                        WHEN "VALUE" DO
+                            setting := evaluate(tokens, INOUT i, [])
+                    END CASE
+                    -- TODO: trace setting
+                WHEN "WHEN" DO
+                    CASE contexts[LAST].type
+                        WHEN ContextType.select DO
+                            i := contexts[LAST].select_skip
+                            contexts.resize(contexts.size() - 1)
+                        WHEN OTHERS DO
+                            error(9.0)
+                    END CASE
+                WHEN OTHERS DO
+                    LET r: String := evaluate(tokens, INOUT i, [])
+                    vars["RC"] := send_command(current_environment, r)
+            END CASE
+        WHEN TokenType.Eos DO
+            CASE contexts[LAST].type
+                WHEN ContextType.call DO
+                    tokens := contexts[LAST].call_tokens
+                    i := contexts[LAST].call_return_ip
+                    contexts.resize(contexts.size() - 1)
+                WHEN OTHERS DO
+                    RETURN FALSE
+            END CASE
+        WHEN OTHERS DO
+            IF tokens[i].type = TokenType.Const_symbol AND tokens[i+1].type = TokenType.Operator AND tokens[i+1].value IN ["=","=="] THEN
+                RAISE SignalException.Syntax("assignment to constant")
+            END IF
+            LET r: String := evaluate(tokens, INOUT i, [])
+            vars["RC"] := send_command(current_environment, r)
+    END CASE
+    IF i = orig_i THEN
+        ASSERT FALSE, "we are stuck", tokens[i]
+    END IF
+    skip_if_ncl(tokens, INOUT i)
+    RETURN TRUE
+END FUNCTION
+
+FUNCTION interpret_function(start_tokens: Array<Token>, start_i: Number): String
+    VAR tokens: Array<Token> := start_tokens
+    VAR i: Number := start_i
+    LET context_depth: Number := contexts.size()
+    WHILE contexts.size() >= context_depth DO
+        IF NOT interpret_step(INOUT tokens, INOUT i) THEN
+            EXIT WHILE
+        END IF
+    END WHILE
+    RETURN vars["RESULT"]
+END FUNCTION
+
+FUNCTION error_halt(e: ExceptionType)
+    LET number: Number := e.info.number
+    LET values: Dictionary<String> := e.info.values
+    LET basenumber := str(math.trunc(number))
+    textio.writeLine(textio.stderr, "Error \(basenumber) running \"\(script_filename)\": \(ErrorText[basenumber])")
+    LET msg := ErrorText[str(number)]
+    VAR r := ""
+    VAR i := 0
+    WHILE i < msg.length() DO
+        LET left := i + string.find(msg[i TO LAST], "<")
+        IF left < i THEN
+            r.append(msg[i TO LAST])
+            EXIT WHILE
+        END IF
+        r.append(msg[i TO left-1])
+        LET right := left + string.find(msg[left TO LAST], ">")
+        ASSERT right > left
+        r.append(values[msg[left+1 TO right-1]])
+        i := right + 1
+    END WHILE
+    textio.writeLine(textio.stderr, "Error \(number): \(r)")
+    sys.exit(1)
+END FUNCTION
+
+FUNCTION interpret()
+    VAR tokens: Array<Token> := source_tokens
+    VAR i: Number := 0
+    WHILE i < tokens.size() DO
+        TRY
+            IF NOT interpret_step(INOUT tokens, INOUT i) THEN
+                EXIT WHILE
+            END IF
+        TRAP SignalException AS e DO
+            LET signal := string.upper(string.replaceOne(e.name, "SignalException.", ""))
+            VAR lindex: Number
+            IF find_label(source_tokens, signal_handlers[signal].label, OUT lindex) THEN
+                vars["SIGL"] := str(tokens[i].line)
+                CASE signal_handlers[signal].instruction
+                    WHEN "CALL" DO
+                        contexts.append(ContextEntry(type WITH ContextType.call, call_tokens WITH tokens, call_return_ip WITH i))
+                    WHEN "SIGNAL" DO
+                        contexts.resize(1)
+                    WHEN OTHERS DO
+                        ASSERT FALSE, signal_handlers[signal].instruction
+                END CASE
+                tokens := source_tokens
+                i := lindex + 1
+                -- TODO: pop contexts and restore vars/arrays
+            ELSE
+                error_halt(e)
+            END IF
+        END TRY
+    END WHILE
+END FUNCTION
+
+BEGIN MAIN
+    VAR a := 1
+    WHILE a < sys.args.size() DO
+        IF string.hasPrefix(sys.args[a], "-") THEN
+            CASE sys.args[a]
+                WHEN "-t" DO
+                    trace := TRUE
+                WHEN OTHERS DO
+                    textio.writeLine(textio.stderr, "Unknown option: \(sys.args[a])")
+                    sys.exit(1)
+            END CASE
+        ELSE
+            script_filename := sys.args[a]
+            INC a
+            EXIT WHILE
+        END IF
+        INC a
+    END WHILE
+    IF script_filename = "" THEN
+        textio.writeLine(textio.stderr, "Script name not specified")
+        sys.exit(1)
+    END IF
+    TRY
+        LET bytes: Bytes := file.readBytes(script_filename)
+        LET source: String := bytes.decodeToString()
+        sourcelines := [""] & string.splitLines(source)
+        source_tokens := tokenise(source)
+    TRAP file.FileException DO
+        error(3.1, {"description": "Program was not found"})
+    TRAP SignalException.Syntax AS e DO
+        error_halt(e)
+    END TRY
+    label_index := make_label_index(source_tokens)
+    --FOREACH t IN source_tokens INDEX i DO
+    --    print("\(i) \(t.type) \(t.value)")
+    --END FOREACH
+    FOREACH s IN Signals DO
+        signal_handlers[s] := SignalHandler(label WITH s, instruction WITH "SIGNAL")
+    END FOREACH
+    contexts.append(ContextEntry(call_return_ip WITH -1, call_args WITH [string.join(sys.args[a TO LAST], " ")]))
+    interpret()
+    ASSERT contexts.size() = 1
+END MAIN
