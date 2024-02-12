@@ -375,7 +375,7 @@ FUNCTION convert_binary_string(s: String): String
         IF i < 0 OR s[i] NOT IN Digits THEN
             RAISE SignalException.Syntax("invalid binary string")
         END IF
-        b := b + string.find(Digits, s[i]) * bit
+        b := b + (string.find(Digits, s[i]) * bit)
         bit := bit * 2
         DEC i
         FOR z := 2 TO 4 DO
@@ -385,7 +385,7 @@ FUNCTION convert_binary_string(s: String): String
             ELSIF s[i] NOT IN Digits THEN
                 RAISE SignalException.Syntax("invalid binary string")
             ELSE
-                b := b + string.find(Digits, s[i]) * bit
+                b := b + (string.find(Digits, s[i]) * bit)
                 bit := bit * 2
                 DEC i
             END IF
@@ -427,7 +427,7 @@ FUNCTION convert_hex_string(s: String): String
             error(15.3, {"char": t[i]})
             -- TODO RAISE SignalException.Syntax("invalid hex string")
         ELSE
-            b := b + string.find(Digits, t[i]) * 0x10
+            b := b + (string.find(Digits, t[i]) * 0x10)
             DEC i
         END IF
         r := string.fromCodePoint(b) & r
@@ -787,7 +787,7 @@ FUNCTION change_radix(s: String, from_radix: Number, to_radix: Number): String
         END IF
         LET d := string.find(Digits, c)
         ASSERT d < from_radix
-        n := n * from_radix + d
+        n := (n * from_radix) + d
     END FOREACH
     VAR r: String := ""
     WHILE n > 0 DO
@@ -953,10 +953,10 @@ FUNCTION builtin_c2d(args: Array<String>): String
     VAR n: Number := 0
     FOR i := start TO s.length()-1 DO
         LET b: Number := string.toCodePoint(s[i])
-        n := n * 0x100 + b
+        n := (n * 0x100) + b
     END FOR
     IF args.size() >= 2 AND length <= s.length() AND sign THEN
-        n := n - 2^(8*length)
+        n := n - (2^(8*length))
     END IF
     RETURN str(n)
 END FUNCTION
@@ -971,7 +971,7 @@ FUNCTION builtin_c2x(args: Array<String>): String
     VAR n: Number := 0
     FOR i := start TO s.length()-1 DO
         LET b: Number := string.toCodePoint(s[i])
-        n := n * 0x100 + b
+        n := (n * 0x100) + b
     END FOR
     VAR r: String := string.upper(base.toHex(n))
     IF math.odd(r.length()) THEN
@@ -986,7 +986,7 @@ FUNCTION builtin_center(args: Array<String>): String
     LET pad: String := (IF args.size() >= 3 AND args[2] <> "" THEN args[2] ELSE " ")
     IF s.length() < length THEN
         LET half: Number := (length - s.length()) INTDIV 2
-        RETURN string.repeat(pad, half) & s & string.repeat(pad, length - s.length() - half)
+        RETURN string.repeat(pad, half) & s & string.repeat(pad, (length - s.length()) - half)
     ELSE
         LET start: Number := (s.length() - length) INTDIV 2
         RETURN s[start TO start+length-1]
@@ -1076,7 +1076,7 @@ FUNCTION builtin_d2c(args: Array<String>): String
     VAR r := ""
     IF n < 0 THEN
         ASSERT length > 0
-        n := 2^(8*length) + n
+        n := (2^(8*length)) + n
     END IF
     WHILE n > 0 DO
         r := string.fromCodePoint(n MOD 0x100) & r
@@ -1091,7 +1091,7 @@ FUNCTION builtin_d2x(args: Array<String>): String
     VAR r := ""
     IF n < 0 THEN
         ASSERT length > 0
-        n := 2^(8*length) + n
+        n := (2^(8*length)) + n
     END IF
     WHILE n > 0 DO
         r := string.upper(base.toHex(n MOD 0x100)) & r
@@ -1178,7 +1178,7 @@ FUNCTION builtin_date(args: Array<String>): String
     LET now := datetime.now()
     CASE option_out
         WHEN "D" DO
-            RETURN str((now.instant - datetime.makeFromParts(datetime.DateTime(year WITH now.year, month WITH 1, day WITH 1)).instant) INTDIV 86400 + 1)
+            RETURN str(((now.instant - datetime.makeFromParts(datetime.DateTime(year WITH now.year, month WITH 1, day WITH 1)).instant) INTDIV 86400) + 1)
         WHEN "E" DO
             RETURN "\(now.day:02d)/\(now.month:02d)/\(now.year MOD 100:02d)"
         WHEN "M" DO
@@ -1456,8 +1456,8 @@ VAR using_lfsr: Boolean := FALSE
 VAR random_seed: Number := 0
 
 FUNCTION random_lfsr(): Number
-    random_seed := (random_seed * 22695477 + 1) MOD 2^32
-    RETURN random_seed INTDIV 2^16
+    random_seed := ((random_seed * 22695477) + 1) MOD (2^32)
+    RETURN random_seed INTDIV (2^16)
 END FUNCTION
 
 FUNCTION builtin_queued(args: Array<String>): String
@@ -1473,9 +1473,9 @@ FUNCTION builtin_random(args: Array<String>): String
         using_lfsr := TRUE
     END IF
     IF using_lfsr THEN
-        RETURN str(random_lfsr() MOD (max - min + 1) + min)
+        RETURN str((random_lfsr() MOD ((max - min) + 1)) + min)
     ELSE
-        RETURN str(random.uint32() MOD (max - min + 1) + min)
+        RETURN str((random.uint32() MOD ((max - min) + 1)) + min)
     END IF
 END FUNCTION
 
@@ -1618,7 +1618,7 @@ FUNCTION builtin_time(args: Array<String>): String
     LET now := datetime.now()
     CASE option_out
         WHEN "C" DO
-            RETURN "\((now.hour + 11) MOD 12 + 1):\(now.minute:02d)\((IF now.hour >= 12 THEN "am" ELSE "pm"))"
+            RETURN "\(((now.hour + 11) MOD 12) + 1):\(now.minute:02d)\((IF now.hour >= 12 THEN "am" ELSE "pm"))"
         WHEN "E" DO
             LET time_now := time.now()
             RETURN str(time_now - time_reset)
@@ -1627,7 +1627,7 @@ FUNCTION builtin_time(args: Array<String>): String
         WHEN "L" DO
             RETURN "\(now.hour:02d):\(now.minute:02d):\(now.second:02d).0"
         WHEN "M" DO
-            RETURN str(now.hour * 60 + now.minute)
+            RETURN str((now.hour * 60) + now.minute)
         WHEN "N" DO
             RETURN "\(now.hour:02d):\(now.minute:02d):\(math.trunc(now.second):02d)"
         WHEN "R" DO
@@ -1636,7 +1636,7 @@ FUNCTION builtin_time(args: Array<String>): String
             time_reset := time_now
             RETURN str(r)
         WHEN "S" DO
-            RETURN str((now.hour * 60 + now.minute) * 60 + math.trunc(now.second))
+            RETURN str((((now.hour * 60) + now.minute) * 60) + math.trunc(now.second))
         WHEN OTHERS DO
             ASSERT FALSE, args
     END CASE
@@ -1801,7 +1801,7 @@ FUNCTION builtin_x2d(args: Array<String>): String
         END IF
     END IF
     LET r := change_radix(hexstring, 16, 10)
-    RETURN (IF negative THEN str(-(2^(4*length)-num(r))) ELSE r)
+    RETURN (IF negative THEN str(-((2^(4*length))-num(r))) ELSE r)
 END FUNCTION
 
 FUNCTION builtin_xrange(args: Array<String>): String
